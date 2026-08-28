@@ -437,7 +437,12 @@ class WellnessPlanViewModel: ObservableObject {
             "weeklySchedule": scheduleDicts,
             "totalWeeks": plan.totalWeeks,
             "createdDate": Timestamp(date: plan.createdDate),
-            "planType": "wellness"
+            "planType": RehabPlan.PlanType.wellness.rawValue,
+            // Store the version explicitly rather than relying on the read-side
+            // default. Wellness plans skip ImageAvailabilityValidator, so they are
+            // legitimately version 1 and the repair-on-load pass should run once —
+            // which is now safe because updatePlan preserves planType.
+            "schemaVersion": plan.schemaVersion
         ]
         if let notes = plan.notes {
             planData["notes"] = notes

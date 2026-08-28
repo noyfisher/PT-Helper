@@ -27,6 +27,9 @@ struct RehabPlanView: View {
     /// One-shot guard for the `plan_viewed` analytics event — `.onAppear` re-fires on
     /// every sheet dismissal, so this ensures the event logs once per viewed saved plan.
     @State private var hasLoggedPlanViewed = false
+    /// Plan awaiting a debounced start-date write. A compact DatePicker emits a value
+    /// on every wheel movement, so the write is deferred until the user settles.
+    @State private var pendingStartDateSave: RehabPlan?
 
     // Tier 1 — serious-warning modal gating.
     @AppStorage("strictValidationV1Enabled") private var strictValidationV1Enabled: Bool = true
@@ -493,12 +496,30 @@ struct RehabPlanView: View {
                     Text("Start Date:")
                         .font(AppFonts.body)
                         .foregroundColor(AppColors.secondaryText)
+                    // Binds startDate, not createdDate: currentWeek/isCompleted are
+                    // derived from startDate, so editing createdDate moved nothing
+                    // and corrupted the plan's ordering key. Writes go through
+                    // updatePlan or they revert on the next listener snapshot.
                     DatePicker("", selection: Binding(
-                        get: { viewModel.rehabPlan?.createdDate ?? Date() },
-                        set: { viewModel.rehabPlan?.createdDate = $0 }
+                        get: { viewModel.rehabPlan?.startDate ?? plan.createdDate },
+                        set: { newStart in
+                            guard var updated = viewModel.rehabPlan else { return }
+                            updated.startDate = newStart
+                            viewModel.rehabPlan = updated
+                            pendingStartDateSave = updated
+                        }
                     ), displayedComponents: .date)
                     .labelsHidden()
                     .datePickerStyle(.compact)
+                }
+                // Debounce: `.task(id:)` cancels the in-flight task whenever the
+                // picked date changes again, so only the settled value is written.
+                .task(id: pendingStartDateSave?.startDate) {
+                    guard let planToSave = pendingStartDateSave else { return }
+                    try? await Task.sleep(for: .milliseconds(700))
+                    guard !Task.isCancelled else { return }
+                    savedPlansVM.updatePlan(planToSave)
+                    pendingStartDateSave = nil
                 }
                 if let notes = plan.notes, !notes.isEmpty {
                     ExpandableSummaryView(

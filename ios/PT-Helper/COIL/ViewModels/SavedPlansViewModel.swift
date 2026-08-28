@@ -137,8 +137,13 @@ class SavedPlansViewModel: ObservableObject {
     // MARK: - Parsing
 
     private func parsePlans(from snapshot: QuerySnapshot?) -> [RehabPlan] {
-        snapshot?.documents.compactMap { document -> RehabPlan? in
-            let data = document.data()
+        snapshot?.documents.compactMap { Self.parsePlan(from: $0.data()) } ?? []
+    }
+
+    /// Decode a single `rehabPlans` document. Split out of `parsePlans` so the
+    /// document round trip (`planDocumentData` -> `parsePlan`) is unit-testable
+    /// without constructing a Firestore `QuerySnapshot`.
+    static func parsePlan(from data: [String: Any]) -> RehabPlan? {
             guard let idString = data["id"] as? String,
                   let id = UUID(uuidString: idString),
                   let planName = data["planName"] as? String else {
@@ -210,8 +215,15 @@ class SavedPlansViewModel: ObservableObject {
                 lastModifiedDate: (data["lastModifiedDate"] as? Timestamp)?.dateValue()
             )
             plan.schemaVersion = data["schemaVersion"] as? Int ?? 1
+            // Wellness plans are stored in this same collection and are only
+            // distinguishable by these two fields. Missing/unrecognized values keep
+            // the model default (.rehab), which is correct for legacy rehab plans.
+            if let rawPlanType = data["planType"] as? String,
+               let parsedPlanType = RehabPlan.PlanType(rawValue: rawPlanType) {
+                plan.planType = parsedPlanType
+            }
+            plan.sourceGoalCategories = data["sourceGoalCategories"] as? [String]
             return plan
-        } ?? []
     }
 
     // MARK: - Repair-on-load (PR 3)
@@ -283,7 +295,25 @@ class SavedPlansViewModel: ObservableObject {
         }
         Task { await NotificationService.shared.syncPlanReminders(plans: rehabPlans) }
 
-        // Serialize exercises
+        db.collection("users").document(uid).collection("rehabPlans")
+            .document(plan.id.uuidString)
+            .setData(Self.planDocumentData(for: plan)) { error in
+                if let error = error {
+                    AppLogger.data.error("Error updating plan: \(error.localizedDescription)")
+                }
+            }
+    }
+
+    /// The canonical `rehabPlans` document shape.
+    ///
+    /// Single source of truth on purpose: this dictionary used to be rebuilt
+    /// independently here and in two save paths, and the copy here silently omitted
+    /// `planType`/`sourceGoalCategories`. Because the write is a full-document
+    /// `setData` (not a merge), that omission *deleted* those fields — and the
+    /// repair-on-load pass calls `updatePlan` for every schemaVersion<2 plan, so
+    /// every wellness plan was converted to a rehab plan shortly after being saved.
+    /// Round-trips with `parsePlan(from:)`; keep the two in step.
+    static func planDocumentData(for plan: RehabPlan) -> [String: Any] {
         let exercisesData: [[String: Any]] = plan.exercises.map { e in
             var dict: [String: Any] = [
                 "id": e.id.uuidString,
@@ -325,19 +355,16 @@ class SavedPlansViewModel: ObservableObject {
             "weeklySchedule": scheduleDict,
             "totalWeeks": plan.totalWeeks,
             "createdDate": Timestamp(date: plan.createdDate),
-            "schemaVersion": plan.schemaVersion
+            "schemaVersion": plan.schemaVersion,
+            "planType": plan.planType.rawValue
         ]
+        if let goalCategories = plan.sourceGoalCategories {
+            planData["sourceGoalCategories"] = goalCategories
+        }
         if let notes = plan.notes { planData["notes"] = notes }
         if let startDate = plan.startDate { planData["startDate"] = Timestamp(date: startDate) }
         if let lastMod = plan.lastModifiedDate { planData["lastModifiedDate"] = Timestamp(date: lastMod) }
-
-        db.collection("users").document(uid).collection("rehabPlans")
-            .document(plan.id.uuidString)
-            .setData(planData) { error in
-                if let error = error {
-                    AppLogger.data.error("Error updating plan: \(error.localizedDescription)")
-                }
-            }
+        return planData
     }
 
     func deletePlan(_ plan: RehabPlan) {

@@ -895,7 +895,11 @@ class RehabPlanViewModel: ObservableObject {
             "exercises": exerciseDicts,
             "weeklySchedule": scheduleDicts,
             "totalWeeks": plan.totalWeeks,
-            "createdDate": Timestamp(date: plan.createdDate)
+            "createdDate": Timestamp(date: plan.createdDate),
+            "planType": plan.planType.rawValue,
+            // Persist the version we actually built so the repair-on-load pass
+            // doesn't rewrite every freshly saved plan on the next cold start.
+            "schemaVersion": plan.schemaVersion
         ]
         if let notes = plan.notes {
             planData["notes"] = notes
