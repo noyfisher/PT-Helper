@@ -63,6 +63,20 @@ Follow these 5 rules on every code task. They minimize hallucinations and regres
 
 Full rules: `~/.claude/projects/-Users-noyfisher-IOS-Projects-PT-Helper-Agent-v1/memory/feedback_engineering_protocol.md`
 
+## Parallel Sessions
+
+Multiple Claude Code sessions may run against this repo concurrently. Rules:
+
+- **One worktree per concurrent session.** Start parallel sessions with `claude -w <name>` or ask a running session to "work in a worktree". The main checkout shares one git index — concurrent sessions there can clobber each other's edits, and `git add .`/`commit -a` sweeps up another session's work-in-progress.
+- **Same-checkout parallelism** only for short tasks in strictly disjoint areas (e.g. `functions/` vs `ios/`); stage files explicitly, never in bulk.
+- **Simulator**: one device per session, targeted by UDID — two runs on one booted sim fight over install/launch.
+- **Firebase deploys**: serialize — never `firebase deploy` from two sessions at once (single pt-helper-dev project).
+- **Image pipeline** (`scripts/`): main checkout only, one owner session at a time (shared `scripts/output/` + API quotas; the directory is gitignored and doesn't follow into worktrees).
+- **Untracked essentials** (`functions/.env`, `scripts/animation-pilot/.env`) are copied into new worktrees via `.worktreeinclude` — add new gitignored-but-required files there.
+- **Merges**: small branches, rebase on `main` often, FullPlan before merge.
+
+Full recipes (starting sessions, simulator assignment table, cross-session messaging, lead+agents pattern): `ios/PT-Helper/docs/parallel-sessions.md`.
+
 ## Architecture
 
 ### MVVM + Services Pattern

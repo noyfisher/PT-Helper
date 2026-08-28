@@ -25,38 +25,38 @@
 			containerPortal = 7A071AEC2E8236EC00497F94 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 7A071AF32E8236EC00497F94;
-			remoteInfo = "COIL";
+			remoteInfo = COIL;
 		};
 		7A071B0F2E8236EE00497F94 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 7A071AEC2E8236EC00497F94 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 7A071AF32E8236EC00497F94;
-			remoteInfo = "COIL";
+			remoteInfo = COIL;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		7A071AF42E8236EC00497F94 /* COIL.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "COIL.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		7A071B042E8236EE00497F94 /* COILTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "COILTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		7A071B0E2E8236EE00497F94 /* COILUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "COILUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		7A071AF42E8236EC00497F94 /* COIL.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = COIL.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7A071B042E8236EE00497F94 /* COILTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = COILTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		7A071B0E2E8236EE00497F94 /* COILUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = COILUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7A071B212E82399A00497F94 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		7A071AF62E8236EC00497F94 /* COIL */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "COIL";
+			path = COIL;
 			sourceTree = "<group>";
 		};
 		7A071B072E8236EE00497F94 /* COILTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "COILTests";
+			path = COILTests;
 			sourceTree = "<group>";
 		};
 		7A071B112E8236EE00497F94 /* COILUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "COILUITests";
+			path = COILUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -135,7 +135,7 @@
 			fileSystemSynchronizedGroups = (
 				7A071AF62E8236EC00497F94 /* COIL */,
 			);
-			name = "COIL";
+			name = COIL;
 			packageProductDependencies = (
 				7A071B242E823C9C00497F94 /* FirebaseAnalytics */,
 				7A071B262E823C9C00497F94 /* FirebaseAuth */,
@@ -147,7 +147,7 @@
 				7AF8B2DF2F7E6818003B41A8 /* GoogleSignIn */,
 				7AF8B2E12F7E6818003B41A8 /* GoogleSignInSwift */,
 			);
-			productName = "COIL";
+			productName = COIL;
 			productReference = 7A071AF42E8236EC00497F94 /* COIL.app */;
 			productType = "com.apple.product-type.application";
 		};
@@ -167,10 +167,10 @@
 			fileSystemSynchronizedGroups = (
 				7A071B072E8236EE00497F94 /* COILTests */,
 			);
-			name = "COILTests";
+			name = COILTests;
 			packageProductDependencies = (
 			);
-			productName = "COILTests";
+			productName = COILTests;
 			productReference = 7A071B042E8236EE00497F94 /* COILTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
@@ -190,10 +190,10 @@
 			fileSystemSynchronizedGroups = (
 				7A071B112E8236EE00497F94 /* COILUITests */,
 			);
-			name = "COILUITests";
+			name = COILUITests;
 			packageProductDependencies = (
 			);
-			productName = "COILUITests";
+			productName = COILUITests;
 			productReference = 7A071B0E2E8236EE00497F94 /* COILUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
@@ -462,7 +462,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "COIL/COIL.entitlements";
+				CODE_SIGN_ENTITLEMENTS = COIL/COIL.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 15;
 				DEVELOPMENT_ASSET_PATHS = "\"COIL/Preview Content\"";
@@ -492,7 +492,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "COIL/COIL.entitlements";
+				CODE_SIGN_ENTITLEMENTS = COIL/COIL.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 15;
 				DEVELOPMENT_ASSET_PATHS = "\"COIL/Preview Content\"";
@@ -568,7 +568,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = "COIL";
+				TEST_TARGET_NAME = COIL;
 			};
 			name = Debug;
 		};
@@ -585,7 +585,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = "COIL";
+				TEST_TARGET_NAME = COIL;
 			};
 			name = Release;
 		};
