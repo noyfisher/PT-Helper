@@ -529,11 +529,28 @@ class RehabPlanViewModel: ObservableObject {
             }
         }
 
+        // Red-flag conditions are split into their own block. They must still reach
+        // the model (and the downstream contraindication checker keys on condition
+        // names, so they stay in `conditions` elsewhere), but they are not things to
+        // build a rehab programme around — the correct response to a suspected clot
+        // or fracture is evaluation, not exercise selection.
+        let differentialConditions = analysisResult.conditions.filter { !$0.isRedFlag }
+        let flaggedConditions = analysisResult.conditions.filter { $0.isRedFlag }
+
         message += "\n\nIDENTIFIED CONDITIONS:\n"
 
-        for condition in analysisResult.conditions {
+        for condition in differentialConditions {
             message += "- \(condition.conditionName) (Confidence: \(Int(condition.confidence))%)\n"
             message += "  Explanation: \(condition.explanation)\n"
+        }
+
+        if !flaggedConditions.isEmpty {
+            message += "\n\nSERIOUS FINDINGS — DO NOT PROGRAM FOR THESE:\n"
+            for condition in flaggedConditions {
+                message += "- \(condition.conditionName): flagged as potentially serious and pending clinical evaluation. "
+                message += "Do NOT design exercises to treat or rehabilitate this. Choose conservative, low-load options "
+                message += "for the primary complaint and avoid any exercise that loads, stretches, or stresses the affected area.\n"
+            }
         }
 
         // User preferences

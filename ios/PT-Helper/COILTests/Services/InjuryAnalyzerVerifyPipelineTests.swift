@@ -71,6 +71,70 @@ final class InjuryAnalyzerVerifyPipelineTests: XCTestCase {
 
     // MARK: - 2. Two-Call Flow Integration
 
+    /// End-to-end regression anchor for the P0.
+    ///
+    /// This is the only test that crosses BOTH truncations — `synthesize()`'s and
+    /// the validation pipeline's — which is exactly why the defect survived: each
+    /// layer looked correct in isolation, and no test followed a dropped red flag
+    /// all the way to the result the user sees.
+    ///
+    /// The primary pass flags a low-confidence DVT; the devil's-advocate pass drops
+    /// it and returns three higher-confidence benign conditions. The flag must reach
+    /// the validated result AND raise an alert, because `redFlagAlerts` is what
+    /// gates the session-log upload, the has_red_flags analytic, and the plan CTA.
+    func testAnalyze_verifierDropsRedFlag_survivesToValidatedResult() async throws {
+        let primaryWithRedFlag = TestFixtures.makeMultiConditionResponseJSON(conditions: [
+            (name: "Gastrocnemius Strain", commonName: "Calf Strain", confidence: 70, isRedFlag: false),
+            (name: "Achilles Tendinopathy", commonName: "Achilles Pain", confidence: 55, isRedFlag: false),
+            (name: "Soleus Strain", commonName: "Deep Calf Strain", confidence: 40, isRedFlag: false),
+            (name: "Deep Vein Thrombosis", commonName: "Blood Clot", confidence: 15, isRedFlag: true),
+        ], summary: "Primary analysis summary")
+
+        // Verification keeps only the benign three — the flag is dropped.
+        let verifyWithoutRedFlag = TestFixtures.makeMultiConditionResponseJSON(conditions: [
+            (name: "Gastrocnemius Strain", commonName: "Calf Strain", confidence: 70, isRedFlag: false),
+            (name: "Achilles Tendinopathy", commonName: "Achilles Pain", confidence: 55, isRedFlag: false),
+            (name: "Soleus Strain", commonName: "Deep Calf Strain", confidence: 40, isRedFlag: false),
+        ], summary: "Verified analysis summary")
+
+        mock.responsesQueue = [primaryWithRedFlag, verifyWithoutRedFlag]
+
+        let validated = try await InjuryAnalyzer.analyze(
+            assessments: [assessment],
+            profile: profile,
+            apiService: mock
+        )
+
+        XCTAssertTrue(validated.result.conditions.contains { $0.isRedFlag },
+                      "A red flag dropped by the verifier must reach the validated result")
+        XCTAssertTrue(validated.result.conditions.contains { $0.conditionName == "Deep Vein Thrombosis" })
+        XCTAssertFalse(validated.redFlagAlerts.isEmpty,
+                       "The preserved flag must raise an alert — redFlagAlerts gates log upload, analytics and the plan CTA")
+    }
+
+    /// Condition-level flags must never seize the screen: `AnalyzingView` routes to
+    /// the full-screen emergency takeover on `.emergency` alone, and only the
+    /// symptom scan is allowed to emit that severity.
+    func testAnalyze_redFlaggedCondition_neverEmitsEmergency() async throws {
+        let primaryWithRedFlag = TestFixtures.makeMultiConditionResponseJSON(conditions: [
+            (name: "Gastrocnemius Strain", commonName: "Calf Strain", confidence: 70, isRedFlag: false),
+            (name: "Achilles Tendinopathy", commonName: "Achilles Pain", confidence: 55, isRedFlag: false),
+            (name: "Soleus Strain", commonName: "Deep Calf Strain", confidence: 40, isRedFlag: false),
+            (name: "Deep Vein Thrombosis", commonName: "Blood Clot", confidence: 15, isRedFlag: true),
+        ], summary: "Primary analysis summary")
+
+        mock.responsesQueue = [primaryWithRedFlag, primaryWithRedFlag]
+
+        let validated = try await InjuryAnalyzer.analyze(
+            assessments: [assessment],
+            profile: profile,
+            apiService: mock
+        )
+
+        XCTAssertFalse(validated.redFlagAlerts.contains { $0.severity == .emergency },
+                       "Condition-level red flags are .urgent; only symptom detection may escalate to .emergency")
+    }
+
     func testAnalyze_makesTwoCalls() async throws {
         mock.responsesQueue = [primaryJSON, verifyJSON]
 
@@ -160,8 +224,13 @@ final class InjuryAnalyzerVerifyPipelineTests: XCTestCase {
         let primary = TestFixtures.makeAnalysisResult(conditions: [
             TestFixtures.makeCondition(name: "Cauda Equina Syndrome", commonName: "Spinal Emergency", confidence: 25, isRedFlag: true),
         ])
+        // Three verification conditions, all out-ranking the flag, so this actually
+        // exercises the truncation boundary. With a single condition the total was 2
+        // and prefix(3) never bit — which is why this test passed throughout the P0.
         let verification = TestFixtures.makeAnalysisResult(conditions: [
             TestFixtures.makeCondition(name: "Meniscus Tear", commonName: "Torn Cartilage", confidence: 60),
+            TestFixtures.makeCondition(name: "Lumbar Strain", commonName: "Back Strain", confidence: 50),
+            TestFixtures.makeCondition(name: "Sciatica", commonName: "Sciatic Pain", confidence: 45),
         ])
 
         let result = InjuryAnalyzer.synthesize(
@@ -193,9 +262,10 @@ final class InjuryAnalyzerVerifyPipelineTests: XCTestCase {
                         "Non-red-flag condition dropped by verifier should stay dropped")
     }
 
-    func testSynthesize_returnsTopThreeByConfidence() {
-        // Verification has 3 conditions + primary has red flag → 4 total
-        // Should return top 3 by confidence
+    /// The P0 scenario. This test previously asserted only `count == 3`, which the
+    /// defect satisfied perfectly: a low-confidence red flag was re-added and then
+    /// immediately truncated back out, and the suite stayed green.
+    func testSynthesize_redFlagRidesAlongsideTopThree() {
         let primary = TestFixtures.makeAnalysisResult(conditions: [
             TestFixtures.makeCondition(name: "DVT", commonName: "Blood Clot", confidence: 15, isRedFlag: true),
         ])
@@ -210,7 +280,44 @@ final class InjuryAnalyzerVerifyPipelineTests: XCTestCase {
             assessments: [assessment], profile: profile
         )
 
-        XCTAssertEqual(result.conditions.count, 3, "Should return at most 3 conditions")
+        XCTAssertEqual(result.conditions.count, 4,
+                       "The red flag rides alongside the ranked head rather than competing for a slot")
+        XCTAssertTrue(result.conditions.contains(where: { $0.isRedFlag && $0.conditionName == "DVT" }),
+                      "A dropped red flag must survive synthesis")
+
+        // Nothing from the differential is displaced.
+        for name in ["Patellofemoral Pain Syndrome", "Meniscus Tear", "IT Band Syndrome"] {
+            XCTAssertTrue(result.conditions.contains(where: { $0.conditionName == name }),
+                          "\(name) should not be evicted by the preserved red flag")
+        }
+
+        XCTAssertEqual(result.conditions.first?.conditionName, "Patellofemoral Pain Syndrome",
+                       "Ranked head order is preserved, so `conditions.first` stays the likeliest cause")
+
+        let dvt = result.conditions.first(where: { $0.conditionName == "DVT" })
+        XCTAssertEqual(dvt?.confidence, 15,
+                       "A rescued red flag gets no agreement bonus and no confidence floor")
+    }
+
+    /// The original intent of the test above: a differential with no red flags is
+    /// still capped at the ranked head.
+    func testSynthesize_noRedFlags_capsAtThree() {
+        let primary = TestFixtures.makeAnalysisResult(conditions: [
+            TestFixtures.makeCondition(name: "Patellar Tendinopathy", commonName: "Jumper's Knee", confidence: 30),
+        ])
+        let verification = TestFixtures.makeAnalysisResult(conditions: [
+            TestFixtures.makeCondition(name: "Patellofemoral Pain Syndrome", commonName: "Runner's Knee", confidence: 70),
+            TestFixtures.makeCondition(name: "Meniscus Tear", commonName: "Torn Cartilage", confidence: 55),
+            TestFixtures.makeCondition(name: "IT Band Syndrome", commonName: "IT Band Pain", confidence: 40),
+        ])
+
+        let result = InjuryAnalyzer.synthesize(
+            primary: primary, verification: verification,
+            assessments: [assessment], profile: profile
+        )
+
+        XCTAssertEqual(result.conditions.count, 3)
+        XCTAssertFalse(result.conditions.contains(where: { $0.isRedFlag }))
     }
 
     func testSynthesize_usesVerificationSummary() {

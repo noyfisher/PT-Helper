@@ -94,6 +94,55 @@ struct ConfidenceCalibrator {
     }
 }
 
+// MARK: - Condition Retention Policy
+
+/// Decides which conditions survive to the user.
+///
+/// This rule used to live as two independent `prefix(3)` calls — one in
+/// `InjuryAnalyzer.synthesize()` and one in `validateAnalysis` step 5 — and both
+/// ranked red flags *against* the benign differential on a confidence scale where
+/// red flags structurally lose (a possible DVT scores 15-35; benign conditions
+/// score 60-85). So `synthesize()`'s "safety preservation" step would re-add a red
+/// flag the verification pass had dropped, log that it had done so, and then
+/// discard it again on the very next line. The drift between the two copies is the
+/// bug, so the rule lives here once and both sites call it.
+///
+/// Red flags ride *alongside* the ranked head rather than competing for a slot:
+/// displacing a real differential buys nothing (every red-flag UI surface scans the
+/// full array), and flooring a red flag's confidence to make it rank would render
+/// "Strong match" in green next to a suspected blood clot.
+struct ConditionRetentionPolicy {
+    /// How many conditions form the ranked differential shown as cards.
+    static let maxRankedConditions = 3
+    /// Ceiling on rescued red flags, so a pathological response can't balloon the
+    /// list. Not expected to bite (responses carry 0-1); over-cap drops are logged.
+    static let maxRescuedRedFlags = 3
+
+    struct Retention {
+        let conditions: [ConditionResult]
+        let rescuedRedFlagCount: Int
+        let droppedRedFlagCount: Int
+    }
+
+    /// Keep the first `maxRankedConditions` of an **already-ordered** list, then
+    /// append any red flag from the tail that would otherwise be truncated.
+    ///
+    /// Deliberately does not re-sort. The head is preserved verbatim so
+    /// `conditions.first` (the Progress tab's "last analysis" headline) and the card
+    /// order are byte-identical for every result that isn't currently losing a red
+    /// flag — that minimum-diff property is what makes this safe to ship as a P0.
+    static func retain(_ ordered: [ConditionResult]) -> Retention {
+        let head = Array(ordered.prefix(maxRankedConditions))
+        let rescuable = ordered.dropFirst(maxRankedConditions).filter { $0.isRedFlag }
+        let rescued = Array(rescuable.prefix(maxRescuedRedFlags))
+        return Retention(
+            conditions: head + rescued,
+            rescuedRedFlagCount: rescued.count,
+            droppedRedFlagCount: rescuable.count - rescued.count
+        )
+    }
+}
+
 // MARK: - Analysis Content Validator
 
 struct AnalysisContentValidator {
@@ -106,8 +155,11 @@ struct AnalysisContentValidator {
         if result.conditions.isEmpty {
             warnings.append(ValidationWarning(severity: .caution, message: "No possible explanations were identified. Consider consulting a healthcare provider for an in-person assessment."))
         }
-        if result.conditions.count > 3 {
-            fixes.append("Trimmed conditions from \(result.conditions.count) to 3")
+        // Report the trim the retention policy will actually perform. A flat
+        // "trimmed to 3" would be a lie once a red flag is preserved past the head.
+        let retainedCount = ConditionRetentionPolicy.retain(result.conditions).conditions.count
+        if retainedCount < result.conditions.count {
+            fixes.append("Trimmed conditions from \(result.conditions.count) to \(retainedCount)")
         }
 
         // 2. Confidence score validation
@@ -364,6 +416,31 @@ struct MedicalRedFlagDetector {
         }
 
         return alerts
+    }
+
+    /// Surface conditions the model itself marked as red flags as first-class alerts.
+    ///
+    /// Distinct from `checkConditions`, which is keyword-driven and deliberately
+    /// emits nothing for an already-flagged condition (so the two don't double up on
+    /// the same wording). That silence meant an AI-flagged condition never reached
+    /// `redFlagAlerts`, which gates session-log upload, the has_red_flags analytic,
+    /// and the persisted risk acknowledgement.
+    ///
+    /// Always `.urgent`, never `.emergency`: only `check(assessments:)` may emit
+    /// `.emergency`, because `AnalyzingView` routes to the full-screen emergency
+    /// takeover on that severity alone, and a condition-level flag must not seize
+    /// the screen. `testValidateAnalysis_redFlaggedCondition_neverEmitsEmergency`
+    /// pins this.
+    static func alerts(forFlagged conditions: [ConditionResult]) -> [ValidationWarning] {
+        conditions.filter { $0.isRedFlag }.map { condition in
+            let message: String
+            if let redFlagMessage = condition.redFlagMessage, !redFlagMessage.isEmpty {
+                message = redFlagMessage
+            } else {
+                message = "\(condition.commonName) may be serious. Please see a healthcare provider before starting any exercise program."
+            }
+            return ValidationWarning(severity: .urgent, message: message)
+        }
     }
 }
 
@@ -1383,7 +1460,17 @@ struct ResponseValidationPipeline {
         logger.debug("[3/6] Checking condition red flags...")
         let conditionRedFlags = MedicalRedFlagDetector.checkConditions(result.conditions)
         redFlagAlerts.append(contentsOf: conditionRedFlags)
-        logger.debug("[3/6] Condition red flags: \(conditionRedFlags.count)")
+        // AI-flagged conditions additionally surface as first-class alerts.
+        // `redFlagAlerts` is load-bearing beyond the on-screen banner: it decides
+        // whether the session log is uploaded, sets the has_red_flags analytic, and
+        // supplies the messages persisted by RiskAcknowledgementRecorder. Without
+        // this, a condition the model itself marked serious contributed to none of
+        // those — checkConditions is keyword-driven and stays deliberately silent
+        // for conditions already flagged (see testCheckConditions_fracture_
+        // alreadyRedFlagged_notDoubled, which pins that behavior).
+        let flaggedConditionAlerts = MedicalRedFlagDetector.alerts(forFlagged: result.conditions)
+        redFlagAlerts.append(contentsOf: flaggedConditionAlerts)
+        logger.debug("[3/6] Condition red flags: \(conditionRedFlags.count), AI-flagged: \(flaggedConditionAlerts.count)")
 
         // 4. Anatomical relevance check
         logger.debug("[4/6] Checking anatomical relevance...")
@@ -1392,9 +1479,44 @@ struct ResponseValidationPipeline {
         allWarnings.append(contentsOf: anatomicalWarnings)
         logger.debug("[4/6] Anatomical warnings: \(anatomicalWarnings.count)")
 
-        // 5. Calibrate confidence scores and cap at maximum
-        logger.debug("[5/6] Calibrating confidence scores...")
-        let calibratedConditions = result.conditions.prefix(3).map { condition in
+        // 5. Deduplicate conditions.
+        // Runs BEFORE retention so a duplicate can't consume one of the three ranked
+        // slots — `[A, A, B, C]` previously truncated to `[A, A, B]` and then deduped
+        // to two conditions, silently losing C. A red-flagged copy also wins a name
+        // collision, since dropping it is the defect this pass exists to prevent.
+        logger.debug("[5/6] Deduplicating conditions...")
+        var seenIndex: [String: Int] = [:]
+        var dedupedConditions: [ConditionResult] = []
+        for condition in result.conditions {
+            let key = condition.conditionName.lowercased()
+            if let existing = seenIndex[key] {
+                allFixes.append("Removed duplicate condition: \(condition.commonName)")
+                if condition.isRedFlag && !dedupedConditions[existing].isRedFlag {
+                    dedupedConditions[existing] = condition
+                }
+                continue
+            }
+            seenIndex[key] = dedupedConditions.count
+            dedupedConditions.append(condition)
+        }
+
+        // 6. Apply the retention policy, then calibrate confidence.
+        // The retention policy — not a bare prefix(3) — decides what survives, so a
+        // low-confidence red flag reaches the user instead of being ranked out.
+        logger.debug("[6/6] Applying retention policy and calibrating confidence...")
+        let retention = ConditionRetentionPolicy.retain(dedupedConditions)
+        if retention.rescuedRedFlagCount > 0 {
+            logger.warning("Retained \(retention.rescuedRedFlagCount) red flag(s) past the ranked top \(ConditionRetentionPolicy.maxRankedConditions)")
+            allFixes.append("Preserved \(retention.rescuedRedFlagCount) potentially serious finding(s) beyond the top \(ConditionRetentionPolicy.maxRankedConditions)")
+        }
+        if retention.droppedRedFlagCount > 0 {
+            logger.error("Dropped \(retention.droppedRedFlagCount) red flag(s) over the rescue cap")
+            redFlagAlerts.append(ValidationWarning(
+                severity: .urgent,
+                message: "Additional potentially serious findings were identified. Please see a healthcare provider before starting any exercise program."
+            ))
+        }
+        let uniqueConditions = retention.conditions.map { condition in
             ConditionResult(
                 id: condition.id,
                 conditionName: condition.conditionName,
@@ -1407,19 +1529,6 @@ struct ResponseValidationPipeline {
                 redFlagMessage: condition.redFlagMessage,
                 nextSteps: condition.nextSteps
             )
-        }
-
-        // 6. Deduplicate conditions
-        logger.debug("[6/6] Deduplicating conditions...")
-        var seen = Set<String>()
-        let uniqueConditions = calibratedConditions.filter { condition in
-            let key = condition.conditionName.lowercased()
-            if seen.contains(key) {
-                allFixes.append("Removed duplicate condition: \(condition.commonName)")
-                return false
-            }
-            seen.insert(key)
-            return true
         }
 
         // Build validated result

@@ -356,8 +356,20 @@ class InjuryAnalyzer {
             }
         }
 
-        // Sort by confidence descending, take top 3
-        let topConditions = Array(synthesized.sorted { $0.confidence > $1.confidence }.prefix(3))
+        // Rank by confidence, then keep the ranked head PLUS any red flag that would
+        // otherwise fall off the end. A re-added red flag deliberately receives no
+        // agreement bonus and no confidence floor — the bonus encodes "both passes
+        // agreed", and a rescued flag is by definition one the verifier disagreed
+        // with. See ConditionRetentionPolicy.
+        let ranked = synthesized.sorted { $0.confidence > $1.confidence }
+        let retention = ConditionRetentionPolicy.retain(ranked)
+        if retention.rescuedRedFlagCount > 0 {
+            logger.warning("Preserved \(retention.rescuedRedFlagCount) red flag(s) beyond the ranked top \(ConditionRetentionPolicy.maxRankedConditions)")
+        }
+        if retention.droppedRedFlagCount > 0 {
+            logger.error("Dropped \(retention.droppedRedFlagCount) red flag(s) over the rescue cap")
+        }
+        let topConditions = retention.conditions
 
         // Use verification's summary and disclaimer (it had the most context)
         return AnalysisResult(

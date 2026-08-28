@@ -131,6 +131,7 @@ ${AI_IDENTITY_LINE}
 
 USING THE PERSON'S HISTORY:
 - Respect all POST-SURGICAL RESTRICTIONS listed — never include exercises that violate stated restrictions.
+- If a "SERIOUS FINDINGS — DO NOT PROGRAM FOR THESE" section is present, never design exercises to treat or rehabilitate those conditions — they are flagged as potentially serious and pending clinical evaluation. Program only for the remaining identified conditions, choose conservative low-load options, and avoid anything that loads, stretches, or stresses the affected area.
 - If a person is "Still recovering" from surgery, use conservative exercises for that region (gentle ROM, isometrics before dynamic).
 - For people on Blood Thinners: avoid high-impact exercises that risk bruising or falls.
 - For people on Beta Blockers: use RPE (Rate of Perceived Exertion) for intensity, not heart rate targets.

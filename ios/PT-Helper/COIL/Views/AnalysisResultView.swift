@@ -35,13 +35,13 @@ struct AnalysisResultView: View {
                     if !redFlagAlerts.isEmpty {
                         appRedFlagAlert
                     }
-                    if analysisResult.conditions.contains(where: { $0.isRedFlag }) {
+                    if !aiRedFlagMessages.isEmpty {
                         aiRedFlagAlert
                     }
                     // Lead with the answer the user waited for (audit #25).
                     overallSummaryCard
                     verificationBadge
-                    ForEach(Array(analysisResult.conditions.prefix(3).enumerated()), id: \.element.id) { index, condition in
+                    ForEach(Array(displayedConditions.enumerated()), id: \.element.id) { index, condition in
                         conditionCard(for: condition)
                             // Reveal one at a time so the diagnosis feels considered,
                             // not dumped on the user (audit #78).
@@ -77,12 +77,15 @@ struct AnalysisResultView: View {
         .sheet(isPresented: $showRiskAcknowledgement) {
             RedFlagAcknowledgementSheet(
                 analysisId: analysisResult.id.uuidString,
-                warningMessages: redFlagAlerts.map(\.message)
-                    + analysisResult.conditions.filter(\.isRedFlag).compactMap(\.redFlagMessage),
+                warningMessages: redFlagAlerts.map(\.message) + aiRedFlagMessages,
                 onAcknowledge: {
                     SeriousWarningAcknowledgements.acknowledge(planId: analysisResult.id.uuidString)
+                    // Persist exactly what the sheet displayed. This previously
+                    // recorded only the app-detected alerts, so condition-level
+                    // warnings the user actually acknowledged were absent from the
+                    // record — a gap in the acknowledgement trail.
                     RiskAcknowledgementRecorder.record(analysisId: analysisResult.id.uuidString,
-                                                       warnings: redFlagAlerts.map(\.message))
+                                                       warnings: redFlagAlerts.map(\.message) + aiRedFlagMessages)
                     showRiskAcknowledgement = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                         showPreferencesSheet = true
@@ -194,6 +197,30 @@ struct AnalysisResultView: View {
     /// Whether any red flag (app- or AI-detected) is present — gates the plan CTA.
     private var hasAnyRedFlag: Bool {
         !redFlagAlerts.isEmpty || analysisResult.conditions.contains(where: { $0.isRedFlag })
+    }
+
+    /// Conditions to render as cards.
+    ///
+    /// The validation pipeline already bounds this array (ConditionRetentionPolicy),
+    /// so the view's former `.prefix(3)` only served to hide a preserved red flag —
+    /// and the card is what carries `nextSteps`/`howToManage`, while the banner
+    /// carries only `redFlagMessage`. A frightening sentence with no next steps is
+    /// worse than none. Red flags render first so a serious finding isn't buried
+    /// below three benign cards; the model array order is left untouched so the
+    /// Progress tab's `conditions.first` still shows the likeliest cause.
+    private var displayedConditions: [ConditionResult] {
+        analysisResult.conditions.filter(\.isRedFlag)
+            + analysisResult.conditions.filter { !$0.isRedFlag }
+    }
+
+    /// Red-flag messages shown in the acknowledgement sheet, de-duplicated against
+    /// the app-detected alerts so the same sentence isn't printed twice.
+    private var aiRedFlagMessages: [String] {
+        let existing = Set(redFlagAlerts.map(\.message))
+        return analysisResult.conditions
+            .filter(\.isRedFlag)
+            .compactMap(\.redFlagMessage)
+            .filter { !$0.isEmpty && !existing.contains($0) }
     }
 
     // MARK: - Condition Card
@@ -425,8 +452,10 @@ struct AnalysisResultView: View {
                 }
                 Spacer()
             }
-            ForEach(analysisResult.conditions.filter({ $0.isRedFlag })) { condition in
-                Text(condition.redFlagMessage ?? "")
+            // De-duplicated against appRedFlagAlert: AI-flagged conditions now also
+            // feed redFlagAlerts, so the same sentence would otherwise appear twice.
+            ForEach(aiRedFlagMessages, id: \.self) { message in
+                Text(message)
                     .font(AppFonts.body)
                     .foregroundColor(AppColors.ctaText.opacity(0.95))
             }
