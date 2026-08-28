@@ -267,25 +267,28 @@ class KnowledgeGraphService {
             return (conditionID, condition)
         }
 
-        // 2. Substring containment — normalize both sides to spaces for comparison
-        for (alias, conditionID) in conditionAliasMap {
-            let aliasNorm = alias.replacingOccurrences(of: "-", with: " ")
-            if nameNorm.contains(aliasNorm) || aliasNorm.contains(nameNorm) {
-                if let condition = graph.conditions[conditionID] {
-                    return (conditionID, condition)
-                }
-            }
+        // 2. Fuzzy match — longest matching alias wins.
+        //
+        // This previously iterated the alias Dictionary and returned the FIRST
+        // substring hit. Swift randomizes dictionary order per process, so when
+        // several aliases matched, the winner changed between launches. That is
+        // unacceptable in a layer whose whole purpose is a deterministic verdict:
+        // "runner's knee" is a substring of the "runner's knee lateral" alias, and
+        // those two resolve to different conditions with different unsafe lists.
+        if let match = TermMatching.bestMatch(for: name, in: conditionAliasMap),
+           let condition = graph.conditions[match.value] {
+            return (match.value, condition)
         }
 
-        // 3. Normalized comparison (strip common suffixes/prefixes)
-        let normalized = normalizeConditionName(nameNorm)
-        for (alias, conditionID) in conditionAliasMap {
-            let normalizedAlias = normalizeConditionName(alias.replacingOccurrences(of: "-", with: " "))
-            if normalized == normalizedAlias || normalized.contains(normalizedAlias) || normalizedAlias.contains(normalized) {
-                if let condition = graph.conditions[conditionID] {
-                    return (conditionID, condition)
-                }
-            }
+        // 3. Retry against stop-word-stripped aliases ("syndrome", "chronic", ...),
+        // still longest-wins so the outcome stays order-independent.
+        let strippedAliases = Dictionary(
+            conditionAliasMap.map { (normalizeConditionName($0.key.replacingOccurrences(of: "-", with: " ")), $0.value) },
+            uniquingKeysWith: { first, second in min(first, second) }
+        )
+        if let match = TermMatching.bestMatch(for: normalizeConditionName(nameNorm), in: strippedAliases),
+           let condition = graph.conditions[match.value] {
+            return (match.value, condition)
         }
 
         return nil
@@ -319,12 +322,14 @@ class KnowledgeGraphService {
             return resolve(exerciseID)
         }
 
-        // 2. Substring containment — normalize both sides to spaces
-        for (alias, exerciseID) in exerciseAliasMap {
-            let aliasNorm = alias.replacingOccurrences(of: "-", with: " ")
-            if nameNorm.contains(aliasNorm) || aliasNorm.contains(nameNorm) {
-                return resolve(exerciseID)
-            }
+        // 2. Fuzzy match — longest matching alias wins, so the result is the same on
+        // every launch. First-match-wins over a Dictionary meant "Wrist Curl" could
+        // resolve to `wrist-curls` (unsafe for tennis elbow) or `reverse-wrist-curls`
+        // (safe for it) depending on the process hash seed. Preferring the longest
+        // alias also picks the more specific exercise, which is the safer answer:
+        // `lateral-step-ups` over `step-ups` for "Lateral Step Ups".
+        if let match = TermMatching.bestMatch(for: name, in: exerciseAliasMap) {
+            return resolve(match.value)
         }
 
         // 3. Normalized filename match (kebab-case comparison)
@@ -405,26 +410,35 @@ class KnowledgeGraphService {
         for exercise in plan.exercises {
             var worstTier: VerificationTier = .unverified
             var contraindicationReason: String?
+            // "Verified for condition A" must not stand in for "checked against
+            // condition B". Previously a single .verified overwrote the tier, so an
+            // exercise the graph knows nothing about for the user's OTHER condition
+            // was excluded from `unverifiedExercises` and therefore never reached
+            // cross-model verification. An unknown pairing is not a safe pairing.
+            var hasUnknownCondition = false
+            var hasVerifiedCondition = false
 
             for condition in conditions {
                 let tier = verify(exercise: exercise.name, forCondition: condition)
 
                 switch tier {
                 case .contraindicated(let reason):
-                    // Contraindicated takes highest priority
+                    // Contraindicated takes highest priority and is terminal.
                     worstTier = tier
                     contraindicationReason = reason
                 case .verified:
-                    // Only upgrade to verified if we haven't found a contraindication
-                    if case .contraindicated = worstTier {
-                        // Keep contraindicated
-                    } else {
-                        worstTier = .verified
-                    }
+                    hasVerifiedCondition = true
                 case .unverified:
-                    // Keep current tier unless it's already better
-                    break
+                    hasUnknownCondition = true
                 }
+            }
+
+            if case .contraindicated = worstTier {
+                // Keep the contraindication.
+            } else if hasUnknownCondition {
+                worstTier = .unverified
+            } else if hasVerifiedCondition {
+                worstTier = .verified
             }
 
             exerciseResults.append((exercise, worstTier))

@@ -677,10 +677,20 @@ struct ExerciseContraindicationChecker {
             let exerciseLower = exercise.name.lowercased()
 
             for (conditionKeyword, blockedExercises) in contraindicatedExercises {
-                let conditionMatches = conditionsLower.contains(where: { $0.contains(conditionKeyword) })
+                // Spelling-tolerant on both sides. Plain `contains` meant the
+                // hyphenated table entries silently missed the spellings the model
+                // actually emits — "Sit Ups" and "Situps" both slipped past
+                // `"sit-up"`, and for a herniated disc this table is the only
+                // deterministic gate (the v1 knowledge graph lists no sit-up entry
+                // for it at all). Word order is tolerated too, so `"jump squat"`
+                // catches "Squat Jumps". Single-token entries such as `"extension"`
+                // keep plain substring semantics, so nothing widens accidentally.
+                let conditionMatches = conditionsLower.contains(where: {
+                    TermMatching.containsTerm(conditionKeyword, in: $0)
+                })
                 guard conditionMatches else { continue }
 
-                let exerciseBlocked = blockedExercises.contains(where: { exerciseLower.contains($0) })
+                let exerciseBlocked = TermMatching.containsAnyTerm(blockedExercises, in: exerciseLower)
                 if exerciseBlocked {
                     // Tier 1 severity: contraindicated exercises against a user's condition are
                     // `.serious` — the user must acknowledge the risk before the plan is shown,
@@ -1677,9 +1687,16 @@ struct ResponseValidationPipeline {
 
         // 9/9. Medication + post-surgical safety checks
         let meds = userProfile.medications ?? []
-        let medsLower = Set(meds.map { $0.lowercased() })
+        // Exact set membership only ever matched the onboarding chip strings
+        // verbatim, so a free-text entry ("Blood thinner", "blood-thinners",
+        // "Warfarin (blood thinner)") silently skipped these gates — and the
+        // medical-history step accepts custom medications. Term matching folds the
+        // separator/plural variants the way the condition checks above already do.
+        let takesMedication: (String) -> Bool = { term in
+            meds.contains { TermMatching.containsTerm(term, in: $0) }
+        }
 
-        if medsLower.contains("blood thinners") {
+        if takesMedication("blood thinners") || takesMedication("blood thinner") {
             let hasImpactOrFall = workingPlan.exercises.contains(where: {
                 let n = $0.name.lowercased()
                 return n.contains("jump") || n.contains("plyometric") || n.contains("balance") || n.contains("single-leg")
@@ -1694,14 +1711,14 @@ struct ResponseValidationPipeline {
             }
         }
 
-        if medsLower.contains("corticosteroids") {
+        if takesMedication("corticosteroids") {
             warnings.append(ValidationWarning(
                 severity: .info,
                 message: "Long-term corticosteroid use can weaken tendons. Start with lower resistance and increase gradually."
             ))
         }
 
-        if medsLower.contains("beta blockers") {
+        if takesMedication("beta blockers") {
             warnings.append(ValidationWarning(
                 severity: .info,
                 message: "Beta blockers affect heart rate response. Use how you feel (perceived exertion) rather than heart rate to gauge exercise intensity."

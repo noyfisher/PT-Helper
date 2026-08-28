@@ -246,11 +246,14 @@ enum HistoryRelevanceFilter {
             return mapped
         }
 
-        // Fuzzy match: check if any term key is contained in the body area text
-        for (term, key) in termMap {
-            if stripped.contains(term) {
-                return key
-            }
+        // Fuzzy match — longest matching term wins, so the zone is the same on every
+        // launch. Iterating the Dictionary and taking the first containment hit was
+        // order-dependent AND wrong for nested terms: "upper_back_strain" contains
+        // both "back" (-> lower_back) and "upper_back" (-> upper_back), so the zone a
+        // surgery was filed under could flip between runs, changing whether that
+        // history was judged relevant enough to enter the AI prompt.
+        if let match = TermMatching.bestMatch(for: stripped, in: termMap) {
+            return match.value
         }
 
         // Fallback: return the stripped key as-is
