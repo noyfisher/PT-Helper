@@ -8,6 +8,13 @@ on:
   # TestFlight uploads are manual only — see the `beta` job.
   workflow_dispatch:
 
+# Least-privilege GITHUB_TOKEN. The repository default is `write`, and neither
+# workflow writes to GitHub — but `actions/checkout` persists the token into
+# .git/config, so any code running later in the job (an npm postinstall, a
+# bundler hook) can read it. A read-only token makes that worthless.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -22,6 +29,10 @@ jobs:
         working-directory: ios/PT-Helper
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Nothing here runs git against the remote, so don't leave the
+          # credential in .git/config for later steps to find.
+          persist-credentials: false
 
       - name: Select Xcode
         run: |
@@ -38,7 +49,7 @@ jobs:
         run: xcrun simctl list devices available | grep iPhone | head -5
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
         with:
           ruby-version: "3.3"
           bundler-cache: true
@@ -90,6 +101,10 @@ jobs:
         working-directory: functions
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Nothing here runs git against the remote, so don't leave the
+          # credential in .git/config for later steps to find.
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -134,6 +149,10 @@ jobs:
         working-directory: functions
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Nothing here runs git against the remote, so don't leave the
+          # credential in .git/config for later steps to find.
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -179,6 +198,10 @@ jobs:
         working-directory: ios/PT-Helper
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Nothing here runs git against the remote, so don't leave the
+          # credential in .git/config for later steps to find.
+          persist-credentials: false
 
       - name: Select Xcode
         run: |
@@ -244,6 +267,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # Nothing here runs git against the remote, so don't leave the
+          # credential in .git/config for later steps to find.
+          persist-credentials: false
+        with:
           fetch-depth: 0  # Full history for changelog generation
 
       - name: Select Xcode
@@ -255,7 +282,7 @@ jobs:
           sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
         with:
           ruby-version: "3.3"
           bundler-cache: true
@@ -321,9 +348,9 @@ jobs:
           echo "Uploading dSYMs from: $DSYM_DIR"
           "$UPLOAD_SCRIPT" -gsp COIL/GoogleService-Info.plist -p ios "$DSYM_DIR"
 
-      - name: Upload IPA artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ipa
-          path: ios/PT-Helper/build/*.ipa
+      # The signed IPA is deliberately NOT uploaded as a workflow artifact.
+      # On a public repository, artifacts are downloadable by any authenticated
+      # GitHub user for the retention window, and `if: always()` published the
+      # distribution-signed build of an unreleased health app even on failed
+      # runs. The build's destination is TestFlight, which the step above
+      # already handled, so the artifact served no purpose.

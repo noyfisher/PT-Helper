@@ -93,7 +93,16 @@ async function getIdToken(): Promise<string> {
   const customToken = await admin.auth().createCustomToken(TEST_UID);
 
   // Exchange custom token for an ID token via Firebase Auth REST API
-  const apiKey = "AIzaSyCv5FSyMOZWjeBl7AQeI5B51tvVoW8PKjU"; // Firebase API key (from GoogleService-Info.plist)
+  // Firebase Web/iOS API keys are public-by-design identifiers (this one also
+  // ships in every IPA), so this is not a credential leak and needs no
+  // rotation — but committing it to a PUBLIC repo hands it over without even
+  // unpacking the app, which is free recon for Identity Toolkit abuse while
+  // GCP API-key restrictions remain unconfirmed. Read it from the environment
+  // instead; this is a manual E2E helper, not deployed code.
+  const apiKey = process.env.FIREBASE_API_KEY;
+  if (!apiKey) {
+    throw new Error("FIREBASE_API_KEY must be set to run the agent E2E helper.");
+  }
   const response = await fetch(
     `https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${apiKey}`,
     {

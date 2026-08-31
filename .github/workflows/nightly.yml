@@ -13,6 +13,13 @@ on:
     - cron: "0 9 * * *" # 09:00 UTC daily
   workflow_dispatch:
 
+# Least-privilege GITHUB_TOKEN. The repository default is `write`, and neither
+# workflow writes to GitHub — but `actions/checkout` persists the token into
+# .git/config, so any code running later in the job (an npm postinstall, a
+# bundler hook) can read it. A read-only token makes that worthless.
+permissions:
+  contents: read
+
 concurrency:
   group: nightly
   cancel-in-progress: false
@@ -38,6 +45,10 @@ jobs:
         working-directory: ios/PT-Helper
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Nothing here runs git against the remote, so don't leave the
+          # credential in .git/config for later steps to find.
+          persist-credentials: false
 
       - name: Select Xcode
         run: |

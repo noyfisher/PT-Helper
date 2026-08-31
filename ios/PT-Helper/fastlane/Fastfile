@@ -1,7 +1,16 @@
 default_platform(:ios)
 
-ASC_KEY_ID_DEFAULT = "HX3TT4DFZY"
-ASC_ISSUER_ID_DEFAULT = "7ac7871f-f081-4467-9ea3-ff2609a89f40"
+# App Store Connect API identifiers come from the environment (CI secrets).
+# They were previously committed as literal fallbacks; on a public repository
+# that pre-stages two of the three components of ASC API auth for anyone
+# browsing. Apple treats Key ID and Issuer ID as non-secret identifiers and the
+# actual AuthKey .p8 is gitignored and has never been committed, so this is
+# defense-in-depth — NOT a credential leak, and no rotation is warranted.
+def require_env!(name)
+  value = ENV[name]
+  UI.user_error!("#{name} must be set (App Store Connect API identifier).") if value.nil? || value.empty?
+  value
+end
 
 platform :ios do
   desc "Run smoke tests"
@@ -19,8 +28,8 @@ platform :ios do
 
   desc "Build IPA for App Store / TestFlight"
   lane :build do
-    key_id = ENV["ASC_KEY_ID"] || ASC_KEY_ID_DEFAULT
-    issuer_id = ENV["ASC_ISSUER_ID"] || ASC_ISSUER_ID_DEFAULT
+    key_id = require_env!("ASC_KEY_ID")
+    issuer_id = require_env!("ASC_ISSUER_ID")
     key_path = File.expand_path("../fastlane/AuthKey.p8", __dir__)
 
     increment_build_number(
@@ -39,8 +48,8 @@ platform :ios do
 
   desc "Build and upload to TestFlight"
   lane :beta do
-    key_id = ENV["ASC_KEY_ID"] || ASC_KEY_ID_DEFAULT
-    issuer_id = ENV["ASC_ISSUER_ID"] || ASC_ISSUER_ID_DEFAULT
+    key_id = require_env!("ASC_KEY_ID")
+    issuer_id = require_env!("ASC_ISSUER_ID")
 
     build
 
