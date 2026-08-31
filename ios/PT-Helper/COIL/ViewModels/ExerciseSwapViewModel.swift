@@ -257,8 +257,12 @@ class ExerciseSwapViewModel: ObservableObject {
         updatedPlan.lastModifiedDate = Date()
         savedPlansVM.updatePlan(updatedPlan)
 
+        // The reason set includes "too_painful", which is a health signal about
+        // this user rather than a behavioural one. Whether a reason was given is
+        // the part the funnel needs; the reason itself stays in the session log,
+        // which is owner-scoped and purged on account deletion.
         AnalyticsService.shared.log(.exerciseSwapped, parameters: [
-            "swap_reason": selectedReason?.rawValue ?? "unknown"
+            "has_reason": selectedReason != nil ? "true" : "false"
         ])
         SessionLogger.shared.log(.buttonTapped, category: .userAction,
                                   message: "Exercise swapped",

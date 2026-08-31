@@ -248,10 +248,7 @@ struct RootView: View {
             profileCompleted = exists
             isCheckingProfile = false
             if exists, let profile = profileService.profile {
-                AnalyticsService.shared.setUserProperties(
-                    activityLevel: profile.activityLevel,
-                    hasProfile: true
-                )
+                AnalyticsService.shared.setUserProperties(hasProfile: true)
                 // Minors see the safety interstitial once after landing in the app.
                 if AgePolicy.isMinor(dateOfBirth: profile.dateOfBirth), !hasSeenMinorSafetyScreen {
                     pendingMinorSafetyScreen = true

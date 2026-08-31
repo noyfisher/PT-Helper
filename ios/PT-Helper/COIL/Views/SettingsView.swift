@@ -256,6 +256,10 @@ struct SettingsView: View {
 
     @MainActor
     private func clearAllLocalUserData() {
+        // GA4 is a processor the deletion function cannot reach, so clear the
+        // local identifiers here; already-exported events need a property-side
+        // deletion request.
+        AnalyticsService.shared.resetForAccountDeletion()
         UserProfileService.shared.clear()
         DisclaimerManager.reset()
         OnboardingViewModel.clearDraft()

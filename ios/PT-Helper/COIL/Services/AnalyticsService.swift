@@ -75,8 +75,11 @@ final class AnalyticsService {
 
     // MARK: - User Properties (for cohort analysis)
 
-    func setUserProperties(activityLevel: String, hasProfile: Bool) {
-        Analytics.setUserProperty(activityLevel, forName: "activity_level")
+    /// `activityLevel` is deliberately NOT forwarded: a GA4 *user property* is a
+    /// durable attribute attached to the UID, and it comes straight off the
+    /// health profile. `hasProfile` carries the funnel signal (did onboarding
+    /// complete) without the health attribute itself.
+    func setUserProperties(hasProfile: Bool) {
         Analytics.setUserProperty(hasProfile ? "true" : "false", forName: "has_profile")
         if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
             Analytics.setUserProperty(version, forName: "app_version")
@@ -85,5 +88,19 @@ final class AnalyticsService {
 
     func setUserId(_ userId: String?) {
         Analytics.setUserID(userId)
+    }
+
+    /// Clear the on-device analytics identifiers and stop further collection for
+    /// this install's current identity.
+    ///
+    /// Account deletion purges Firestore, Storage and the Auth user, but GA4 is
+    /// a separate processor that it cannot reach, so without this the deleted
+    /// user's events stayed associated with a live client id. This does NOT
+    /// retroactively delete events already exported to GA4/BigQuery — that
+    /// requires a user-deletion request on the property itself.
+    func resetForAccountDeletion() {
+        Analytics.setUserID(nil)
+        Analytics.setUserProperty(nil, forName: "has_profile")
+        Analytics.resetAnalyticsData()
     }
 }

@@ -192,8 +192,16 @@ class FormAnalysisViewModel: ObservableObject {
 
             state = .complete(result)
 
+            // The exercise NAME is condition-revealing in a PT app (a pelvic-floor
+            // or post-surgical knee exercise says what is being treated), and
+            // AnalyticsService's own contract is behavioural-only. GA4 events are
+            // keyed to the Firebase UID and are NOT purged by account deletion,
+            // which purges Firestore, Storage and the Auth user only — so this was
+            // an irreversible health-linked disclosure to a third-party processor.
+            // SessionLogger already redacts the identical "exercise" key.
+            // The target area is the coarse signal the funnel actually needs.
             AnalyticsService.shared.log(.formAnalysisCompleted, parameters: [
-                "exercise": exercise.name,
+                "target_area": exercise.targetArea,
                 "score": validatedFeedback.overallScore,
                 "verdict": validatedFeedback.verdict.rawValue,
                 "corrections_count": validatedFeedback.corrections.count,
