@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseAuth
 
 struct OnboardingView: View {
     var onComplete: (() -> Void)? = nil
@@ -85,6 +86,12 @@ struct OnboardingView: View {
                     ProfileReviewStepView(viewModel: viewModel, onComplete: onComplete).tag(6)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
+                // Page-style TabViews are horizontally swipeable by default, and a
+                // swipe writes currentStep straight through the binding without
+                // consulting canProceedFromCurrentStep — bypassing every gate on
+                // the way to Review, including the 13+ age check and Terms.
+                // Navigation is buttons-only.
+                .scrollDisabled(true)
                 .animation(.easeInOut(duration: 0.3), value: viewModel.currentStep)
 
                 // Navigation buttons
@@ -131,7 +138,15 @@ struct OnboardingView: View {
             }
         }
         .fullScreenCover(isPresented: $showHealthConsent) {
-            HealthDataConsentView { showHealthConsent = false }
+            // Consent is required to collect the health profile, so "not now" is
+            // not offered here — but the sheet must not be a trap either. Mirror
+            // RootView's gate: the honest alternative is signing out.
+            HealthDataConsentView(
+                onConsented: { showHealthConsent = false },
+                onDeclineSignOut: {
+                    showHealthConsent = false
+                    try? Auth.auth().signOut()
+                })
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {

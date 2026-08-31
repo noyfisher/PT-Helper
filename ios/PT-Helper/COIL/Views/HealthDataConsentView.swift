@@ -7,6 +7,12 @@ import SwiftUI
 struct HealthDataConsentView: View {
     let onConsented: () -> Void
     var onDeclineSignOut: (() -> Void)? = nil
+    /// Point-of-use presentations (body map, wellness picker) pass this so the
+    /// sheet has a decline path: the user returns to browsing without granting
+    /// consent. Without it — and with `interactiveDismissDisabled()` — the sheet
+    /// had no cancel, no back, and no swipe: a consent screen you can only
+    /// accept is not consent.
+    var onNotNow: (() -> Void)? = nil
 
     @State private var consentCollection = false
     @State private var consentSharing = false
@@ -95,6 +101,16 @@ struct HealthDataConsentView: View {
                         .accessibilityIdentifier("healthConsent.continueButton")
                         .padding(.horizontal, AppSpacing.xl)
                         .padding(.top, AppSpacing.lg)
+
+                        if let onNotNow {
+                            Button("Not Now") {
+                                onNotNow()
+                            }
+                            .font(AppFonts.bodyMedium)
+                            .foregroundColor(AppColors.secondaryText)
+                            .accessibilityIdentifier("healthConsent.notNowButton")
+                            .padding(.top, AppSpacing.sm)
+                        }
 
                         if let onDeclineSignOut {
                             VStack(spacing: AppSpacing.xs) {

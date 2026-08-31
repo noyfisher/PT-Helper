@@ -3,6 +3,7 @@ import XCTest
 
 // MARK: - OnboardingViewModel Tests (non-Firebase parts)
 
+@MainActor
 final class OnboardingViewModelTests: XCTestCase {
 
     /// Helper to fill in valid step 1 data so nextStep() can proceed
@@ -303,5 +304,90 @@ final class OnboardingViewModelTests: XCTestCase {
         let started = history.filter { $0.action == "started" }
         XCTAssertEqual(started.count, 1)
         XCTAssertEqual(started.first?.medication, "Aspirin")
+    }
+}
+
+// MARK: - Step-identity validation (C: age gate + consent)
+
+extension OnboardingViewModelTests {
+
+    private func makeUnderageProfile(_ vm: OnboardingViewModel) {
+        fillValidBasicInfo(vm)
+        fillValidActivityLevel(vm)
+        // 10 years old — under the 13 minimum.
+        vm.userProfile.dateOfBirth = Calendar.current.date(byAdding: .year, value: -10, to: Date())!
+    }
+
+    /// Validation must follow step IDENTITY, not index — the edit flow orders
+    /// steps differently, and an index-keyed switch validated the wrong screen.
+    func testCanProceed_isKeyedOnStepIdentityAcrossBothOrderings() {
+        let vm = OnboardingViewModel()
+        fillValidBasicInfo(vm)
+        // Activity intentionally left blank, so the Activity rule is the one that
+        // can distinguish "validated Activity" from "validated something else".
+
+        // Onboarding order: Activity is position 2.
+        vm.stepOrder = OnboardingViewModel.Step.onboardingOrder
+        vm.currentStep = 2
+        XCTAssertFalse(vm.canProceedFromCurrentStep, "Onboarding step 2 is Activity — blank must block")
+        vm.currentStep = 3
+        XCTAssertTrue(vm.canProceedFromCurrentStep, "Onboarding step 3 is Medical — optional, passes")
+
+        // Edit order: Medical is position 2, Activity is position 5.
+        vm.stepOrder = OnboardingViewModel.Step.editOrder
+        vm.currentStep = 2
+        XCTAssertTrue(vm.canProceedFromCurrentStep, "Edit step 2 is Medical — must NOT be judged by the Activity rule")
+        vm.currentStep = 5
+        XCTAssertFalse(vm.canProceedFromCurrentStep, "Edit step 5 is Activity — blank must block")
+    }
+
+    func testCanProceed_basicInfo_blocksUnder13() {
+        let vm = OnboardingViewModel()
+        fillValidBasicInfo(vm)
+        vm.userProfile.dateOfBirth = Calendar.current.date(byAdding: .year, value: -10, to: Date())!
+        XCTAssertFalse(vm.canProceed(from: .basicInfo), "Under-13 DOB must fail the Basic Info gate")
+    }
+
+    /// The defense-in-depth guard: even if the UI is bypassed (the page TabView
+    /// was swipeable), saveProfile must refuse an invalid profile and must NOT
+    /// record legal acceptance for it.
+    func testIsProfileSubmittable_falseWhenAnyGatingStepFails() {
+        let vm = OnboardingViewModel()
+
+        // Under-13 with everything else valid → not submittable.
+        makeUnderageProfile(vm)
+        XCTAssertFalse(vm.isProfileSubmittable, "An under-13 profile must never be submittable")
+
+        // Missing terms → not submittable.
+        fillValidBasicInfo(vm)
+        fillValidActivityLevel(vm)
+        vm.userProfile.dateOfBirth = Calendar.current.date(byAdding: .year, value: -30, to: Date())!
+        vm.hasAcceptedTerms = false
+        XCTAssertFalse(vm.isProfileSubmittable, "Missing Terms acceptance must block submission")
+
+        // Missing activity level → not submittable (order-independent).
+        vm.hasAcceptedTerms = true
+        vm.userProfile.activityLevel = ""
+        XCTAssertFalse(vm.isProfileSubmittable, "A blank required step blocks submission regardless of position")
+
+        // All gates satisfied → submittable.
+        fillValidActivityLevel(vm)
+        XCTAssertTrue(vm.isProfileSubmittable, "A complete, adult, consented profile is submittable")
+    }
+
+    func testSaveProfile_refusesUnder13_withoutRecordingAcceptance() {
+        let vm = OnboardingViewModel()
+        makeUnderageProfile(vm)
+
+        let expectation = expectation(description: "saveProfile completes")
+        var reportedSuccess = true
+        vm.saveProfile { success in
+            reportedSuccess = success
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 2.0)
+
+        XCTAssertFalse(reportedSuccess, "saveProfile must fail closed for an under-13 profile")
+        XCTAssertTrue(vm.showValidationErrors, "The refusal should surface validation errors to the UI")
     }
 }

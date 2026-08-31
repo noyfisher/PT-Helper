@@ -367,14 +367,26 @@ export function computeAgeFromDob(dobMs: number, nowMs: number): number {
   return age;
 }
 
-async function getUserAge(uid: string): Promise<number | null> {
+// Exported for tests (injectable `db`, same seam as `isRateLimited`).
+//
+// Read order is a security control, not a style choice: firestore.rules makes
+// `dateOfBirth` immutable ONLY on `consents/legal` (set once at terms
+// acceptance, never changeable), while `profile/health` is freely
+// owner-writable. Reading the profile first let any user patch their profile
+// DOB to an adult date and walk through the under-13 hard block and the minor
+// safeguards — the rules-level control existed and was bypassed purely by
+// resolver preference. Consents first; the mutable profile is only a fallback
+// for legacy accounts that predate the consents doc.
+export async function getUserAge(
+  uid: string,
+  db: FirebaseFirestore.Firestore = admin.firestore()
+): Promise<number | null> {
   const cached = ageCache.get(uid);
   if (cached && Date.now() - cached.fetchedAt < AGE_CACHE_TTL_MS) return cached.age;
   let age: number | null = null;
   try {
-    const db = admin.firestore();
-    let dob = (await db.doc(`users/${uid}/profile/health`).get()).get("dateOfBirth");
-    if (!dob) dob = (await db.doc(`users/${uid}/consents/legal`).get()).get("dateOfBirth");
+    let dob = (await db.doc(`users/${uid}/consents/legal`).get()).get("dateOfBirth");
+    if (!dob) dob = (await db.doc(`users/${uid}/profile/health`).get()).get("dateOfBirth");
     if (dob && typeof dob.toDate === "function") {
       age = computeAgeFromDob(dob.toDate().getTime(), Date.now());
     }
@@ -390,12 +402,11 @@ async function getUserAge(uid: string): Promise<number | null> {
 // Eligibility: minor safeguards + health-data consent, enforced server-side on
 // every AI endpoint BEFORE any budget/quota/provider spend (P1-04).
 //
-// The DOB and consent records read here are currently client-writable, so this
-// gate is authoritative against a STALE client (it reads the live, possibly
-// withdrawn, record) but not yet against a maliciously FORGED one. Rules-level
-// immutability of DOB/consent audit fields and a server-owned consent write
-// path are tracked in PR-8 (they need the emulator rules-test harness to land
-// without regressing legitimate writes).
+// The age read here is anchored to `consents/legal.dateOfBirth`, which
+// firestore.rules makes immutable once set — so the under-13/minor gates hold
+// against a client that later edits its (freely writable) profile DOB. Other
+// consent audit fields remain client-writable; a server-owned consent write
+// path is tracked in PR-8.
 // ---------------------------------------------------------------------------
 export interface Eligibility {
   under13: boolean;          // hard block

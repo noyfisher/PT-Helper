@@ -119,12 +119,23 @@ struct BodyMap3DView: View {
         .coilNavBar()
         .sheet(isPresented: $showHealthConsent, onDismiss: {
             // Chain into the disclaimer once consent is granted (never in the same
-            // transaction as the dismissal — Gotcha #2).
+            // transaction as the dismissal — Gotcha #2). When the disclaimer was
+            // already accepted, continue straight to the pain form — previously
+            // this branch did nothing and the user's Continue tap dead-ended back
+            // on the body map. Mirrors WellnessGoalPickerView's chain.
             if ConsentService.shared.hasHealthDataConsent && !DisclaimerManager.hasAccepted {
                 showDisclaimer = true
+            } else if ConsentService.shared.hasHealthDataConsent {
+                injuryAnalysisVM = InjuryAnalysisViewModel(
+                    userProfile: viewModel.userProfile,
+                    selectedRegions: viewModel.selectedRegions
+                )
+                navigateToPainDetail = true
             }
         }) {
-            HealthDataConsentView { showHealthConsent = false }
+            HealthDataConsentView(
+                onConsented: { showHealthConsent = false },
+                onNotNow: { showHealthConsent = false })
         }
         .sheet(isPresented: $showDisclaimer) {
             DisclaimerView(onAccept: {

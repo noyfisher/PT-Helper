@@ -3,7 +3,33 @@ import Foundation
 import FirebaseFirestore
 import FirebaseAuth
 
+@MainActor
 class OnboardingViewModel: ObservableObject {
+
+    /// Step identity, independent of position. Validation is keyed on THIS, not on
+    /// the step index: onboarding presents Basic→Activity→Medical→Surgical→Injury→
+    /// Review while the edit flow presents Basic→Medical→Surgical→Injury→Activity→
+    /// Review, and an index-keyed switch validated edit-step 2 (Medical) against
+    /// the Activity rule while never validating Activity at all.
+    enum Step: CaseIterable {
+        case basicInfo
+        case activityLevel
+        case medicalHistory
+        case surgicalHistory
+        case injuryHistory
+        case review
+
+        /// Order used by OnboardingView.
+        static let onboardingOrder: [Step] = [.basicInfo, .activityLevel, .medicalHistory, .surgicalHistory, .injuryHistory, .review]
+        /// Order used by OnboardingEditView (Update Health Info).
+        static let editOrder: [Step] = [.basicInfo, .medicalHistory, .surgicalHistory, .injuryHistory, .activityLevel, .review]
+    }
+
+    /// The presentation order of steps for the hosting flow. Views that lay out
+    /// their TabView in a different order MUST set this to match, or validation
+    /// applies the wrong rule to the wrong screen.
+    var stepOrder: [Step] = Step.onboardingOrder
+
     @Published var currentStep: Int = 1
     @Published var hasAcceptedTerms: Bool = false
     @Published var userProfile = UserProfile(userId: Auth.auth().currentUser?.uid ?? "",
@@ -24,6 +50,17 @@ class OnboardingViewModel: ObservableObject {
     private let db = Firestore.firestore()
 
     func saveProfile(completion: @escaping (Bool) -> Void) {
+        // Defense-in-depth: the step UIs gate Continue, but nothing here may rely
+        // on the UI having done so (the page TabView was swipeable past every
+        // check, including the 13+ age gate). An invalid profile must not reach
+        // Firestore, and recordLegalAcceptance below must never fire for a
+        // profile whose terms/age requirements aren't actually met.
+        guard isProfileSubmittable else {
+            AppLogger.auth.error("saveProfile refused: profile fails required-step validation")
+            showValidationErrors = true
+            completion(false)
+            return
+        }
         guard let uid = Auth.auth().currentUser?.uid else {
             AppLogger.auth.error("Error saving profile: no authenticated user")
             completion(false)
@@ -131,7 +168,7 @@ class OnboardingViewModel: ObservableObject {
                         userId: data["userId"] as? String ?? uid,
                         firstName: data["firstName"] as? String ?? "",
                         lastName: data["lastName"] as? String ?? "",
-                        dateOfBirth: (data["dateOfBirth"] as? Timestamp)?.dateValue() ?? Date(),
+                        dateOfBirth: UserProfile.parseDateOfBirth(data["dateOfBirth"], context: "OnboardingViewModel.loadProfile"),
                         sex: data["sex"] as? String ?? "",
                         heightFeet: data["heightFeet"] as? Int ?? 0,
                         heightInches: data["heightInches"] as? Int ?? 0,
@@ -201,6 +238,14 @@ class OnboardingViewModel: ObservableObject {
                     }
 
                     self.userProfile = profile
+                    // An existing profile can only have been written through
+                    // saveProfile, which records legal acceptance — so seed the
+                    // flag. Without this, step-identity validation correctly
+                    // requires terms on Basic Info and the edit flow's Continue
+                    // is dead until the user re-accepts terms they already
+                    // accepted (re-acceptance after a legal-version bump is
+                    // RootView's legal gate, not this flow).
+                    self.hasAcceptedTerms = true
                     completion(true)
                 } else {
                     completion(false)
@@ -214,9 +259,16 @@ class OnboardingViewModel: ObservableObject {
     /// Step order (2026 reorder): 1 Basic · 2 Activity · 3 Medical · 4 Surgical
     /// · 5 Injury · 6 Review. Activity moved up to step 2 so a single, momentum-
     /// building tap comes before the heavier optional medical/surgical/injury steps.
-    var canProceedFromCurrentStep: Bool {
-        switch currentStep {
-        case 1:
+    /// The step identity at a 1-based position in the current flow's order.
+    func step(at position: Int) -> Step {
+        let index = position - 1
+        guard stepOrder.indices.contains(index) else { return .review }
+        return stepOrder[index]
+    }
+
+    func canProceed(from step: Step) -> Bool {
+        switch step {
+        case .basicInfo:
             // Basic info: need first name, sex, reasonable height/weight, terms.
             // Last name is optional — nothing user-facing ever shows a surname.
             let hasName = !userProfile.firstName.trimmingCharacters(in: .whitespaces).isEmpty
@@ -225,14 +277,26 @@ class OnboardingViewModel: ObservableObject {
             let hasWeight = userProfile.weight >= 50 && userProfile.weight <= 500
             let isOldEnough = !AgePolicy.isBlocked(dateOfBirth: userProfile.dateOfBirth)
             return hasName && hasSex && hasHeight && hasWeight && hasAcceptedTerms && isOldEnough
-        case 2:
+        case .activityLevel:
             // Activity level must be selected
             return !userProfile.activityLevel.isEmpty
-        default:
-            // Steps 3, 4, 5 (medical, surgical, injury history) are optional
-            // Step 6 is the review/submit step
+        case .medicalHistory, .surgicalHistory, .injuryHistory, .review:
+            // History steps are optional; review is the submit step
             return true
         }
+    }
+
+    var canProceedFromCurrentStep: Bool {
+        canProceed(from: step(at: currentStep))
+    }
+
+    /// Every gating step's rule holds, regardless of which flow or screen the
+    /// data came from. `saveProfile` checks this as defense-in-depth: the
+    /// page-style TabViews are swipeable unless explicitly disabled, and a
+    /// regression there (or any future entry point) must not be able to submit
+    /// an invalid profile or record legal acceptance the user never gave.
+    var isProfileSubmittable: Bool {
+        Step.allCases.allSatisfy { canProceed(from: $0) }
     }
 
     /// Set to true when the user attempts to proceed but validation fails.

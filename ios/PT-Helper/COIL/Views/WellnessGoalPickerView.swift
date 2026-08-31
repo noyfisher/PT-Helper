@@ -56,7 +56,9 @@ struct WellnessGoalPickerView: View {
                 showDetailView = true
             }
         }) {
-            HealthDataConsentView { showHealthConsent = false }
+            HealthDataConsentView(
+                onConsented: { showHealthConsent = false },
+                onNotNow: { showHealthConsent = false })
         }
         .sheet(isPresented: $showWellnessDisclaimer) {
             DisclaimerView(onAccept: { showDetailView = true })

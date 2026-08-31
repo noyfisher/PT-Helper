@@ -70,6 +70,31 @@ struct UserProfile: Codable, Identifiable {
 
     // MARK: - Firestore Parsing
 
+    /// Neutral fallback DOB (age ~30) for a profile document whose `dateOfBirth`
+    /// is missing or unparseable.
+    ///
+    /// The old fallback was `Date()` — age 0 — which silently changed safety
+    /// behavior in both directions: the age-≥65 advanced-exercise check in
+    /// `validateRehabPlan` failed OPEN, and the under-13 hard block fired for a
+    /// legitimate adult whose field got lost. A ~30-year-old prior triggers
+    /// neither the senior nor the minor path, and the legally binding age gate
+    /// does not rest on this value anyway: the server reads the rules-immutable
+    /// `consents/legal` DOB first (`getUserAge`), which is written at terms
+    /// acceptance and cannot go missing the way a re-saved profile field can.
+    static func fallbackDateOfBirth(now: Date = Date()) -> Date {
+        Calendar.current.date(byAdding: .year, value: -30, to: now) ?? now
+    }
+
+    /// Parse a Firestore `dateOfBirth` value, logging when the fallback engages
+    /// so a data problem is visible instead of silently reshaping safety checks.
+    static func parseDateOfBirth(_ raw: Any?, context: String) -> Date {
+        if let date = (raw as? Timestamp)?.dateValue() {
+            return date
+        }
+        AppLogger.data.error("\(context): dateOfBirth missing/unparseable — using neutral ~30y fallback")
+        return fallbackDateOfBirth()
+    }
+
     /// Create a UserProfile from a Firestore data dictionary.
     static func from(firestoreData data: [String: Any]) -> UserProfile {
         let uid = data["userId"] as? String ?? Auth.auth().currentUser?.uid ?? ""
@@ -78,7 +103,7 @@ struct UserProfile: Codable, Identifiable {
             userId: uid,
             firstName: data["firstName"] as? String ?? data["name"] as? String ?? "",
             lastName: data["lastName"] as? String ?? "",
-            dateOfBirth: (data["dateOfBirth"] as? Timestamp)?.dateValue() ?? Date(),
+            dateOfBirth: parseDateOfBirth(data["dateOfBirth"], context: "UserProfile.from"),
             sex: data["sex"] as? String ?? "",
             heightFeet: data["heightFeet"] as? Int ?? 0,
             heightInches: data["heightInches"] as? Int ?? 0,

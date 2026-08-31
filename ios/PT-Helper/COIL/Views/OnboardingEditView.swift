@@ -90,6 +90,8 @@ struct OnboardingEditView: View {
                         }).tag(6)
                     }
                     .tabViewStyle(.page(indexDisplayMode: .never))
+                    // Same swipe bypass as OnboardingView — buttons-only here too.
+                    .scrollDisabled(true)
                     .animation(.easeInOut(duration: 0.3), value: viewModel.currentStep)
 
                     // Navigation buttons
@@ -125,6 +127,11 @@ struct OnboardingEditView: View {
             }
         }
         .onAppear {
+            // This flow lays its TabView out in a different order than onboarding
+            // (Basic, Medical, Surgical, Injury, Activity, Review). Validation is
+            // keyed on step identity via this order — without it, step 2 (Medical)
+            // was validated against the Activity rule and Activity never at all.
+            viewModel.stepOrder = OnboardingViewModel.Step.editOrder
             viewModel.loadProfile { success in
                 viewModel.currentStep = 1
                 isLoading = false
