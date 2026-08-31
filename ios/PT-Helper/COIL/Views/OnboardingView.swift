@@ -76,22 +76,30 @@ struct OnboardingView: View {
                 }
                 .padding(.bottom, AppSpacing.sm)
 
-                // Step content
-                TabView(selection: $viewModel.currentStep) {
-                    BasicInfoStepView(viewModel: viewModel).tag(1)
-                    ActivityLevelStepView(viewModel: viewModel).tag(2)
-                    MedicalHistoryStepView(viewModel: viewModel).tag(3)
-                    SurgicalHistoryStepView(viewModel: viewModel).tag(4)
-                    InjuryHistoryStepView(viewModel: viewModel).tag(5)
-                    ProfileReviewStepView(viewModel: viewModel, onComplete: onComplete).tag(6)
+                // Step content.
+                //
+                // Deliberately NOT a page-style TabView. That container is
+                // horizontally swipeable by default, and a swipe writes
+                // currentStep straight through the binding without consulting
+                // canProceedFromCurrentStep — bypassing every gate on the way to
+                // Review, including the 13+ age check and Terms acceptance.
+                // `.scrollDisabled(true)` is the wrong tool for that: it
+                // propagates through the environment and disables each step's OWN
+                // ScrollView too, which made the form unscrollable and left the
+                // Terms checkbox unreachable. Rendering only the current step
+                // removes the paging gesture by construction and leaves the inner
+                // ScrollViews alone. Navigation is buttons-only.
+                Group {
+                    switch viewModel.currentStep {
+                    case 1: BasicInfoStepView(viewModel: viewModel)
+                    case 2: ActivityLevelStepView(viewModel: viewModel)
+                    case 3: MedicalHistoryStepView(viewModel: viewModel)
+                    case 4: SurgicalHistoryStepView(viewModel: viewModel)
+                    case 5: InjuryHistoryStepView(viewModel: viewModel)
+                    default: ProfileReviewStepView(viewModel: viewModel, onComplete: onComplete)
+                    }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                // Page-style TabViews are horizontally swipeable by default, and a
-                // swipe writes currentStep straight through the binding without
-                // consulting canProceedFromCurrentStep — bypassing every gate on
-                // the way to Review, including the 13+ age check and Terms.
-                // Navigation is buttons-only.
-                .scrollDisabled(true)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .animation(.easeInOut(duration: 0.3), value: viewModel.currentStep)
 
                 // Navigation buttons

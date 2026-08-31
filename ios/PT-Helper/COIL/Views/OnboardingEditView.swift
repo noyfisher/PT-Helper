@@ -79,19 +79,22 @@ struct OnboardingEditView: View {
                     .padding(.bottom, 8)
 
                     // Step content
-                    TabView(selection: $viewModel.currentStep) {
-                        BasicInfoStepView(viewModel: viewModel).tag(1)
-                        MedicalHistoryStepView(viewModel: viewModel).tag(2)
-                        SurgicalHistoryStepView(viewModel: viewModel).tag(3)
-                        InjuryHistoryStepView(viewModel: viewModel).tag(4)
-                        ActivityLevelStepView(viewModel: viewModel).tag(5)
-                        ProfileReviewStepView(viewModel: viewModel, onComplete: {
+                    // Not a page-style TabView — see OnboardingView for why:
+                    // swiping bypassed step validation, and .scrollDisabled(true)
+                    // propagates into each step's own ScrollView. Buttons only.
+                    Group {
+                        switch viewModel.currentStep {
+                        case 1: BasicInfoStepView(viewModel: viewModel)
+                        case 2: MedicalHistoryStepView(viewModel: viewModel)
+                        case 3: SurgicalHistoryStepView(viewModel: viewModel)
+                        case 4: InjuryHistoryStepView(viewModel: viewModel)
+                        case 5: ActivityLevelStepView(viewModel: viewModel)
+                        default: ProfileReviewStepView(viewModel: viewModel, onComplete: {
                             dismiss()
-                        }).tag(6)
+                        })
+                        }
                     }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
-                    // Same swipe bypass as OnboardingView — buttons-only here too.
-                    .scrollDisabled(true)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .animation(.easeInOut(duration: 0.3), value: viewModel.currentStep)
 
                     // Navigation buttons
