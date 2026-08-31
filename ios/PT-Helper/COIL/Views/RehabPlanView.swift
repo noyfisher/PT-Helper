@@ -138,7 +138,12 @@ struct RehabPlanView: View {
                                     Text("Start Guided Workout")
                                 }
                                 .font(.headline)
-                                .foregroundColor(AppColors.primaryText)
+                                // coolGradient is teal in BOTH appearances, so the
+                                // on-color must be fixed too. primaryText flipped to
+                                // near-white in dark mode (~1.4:1); white is no
+                                // better on this bright teal (1.6–2.5:1), so the
+                                // on-accent colour is near-black: 6.9–11.1:1.
+                                .foregroundColor(AppColors.textOnAccent)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, AppSpacing.md + 2)
                                 .background(AppColors.coolGradient)
@@ -862,13 +867,18 @@ struct RehabPlanView: View {
                             .foregroundColor(AppColors.warning)
                         Text("Things to Keep in Mind")
                             .font(AppFonts.bodySemiBold)
-                            .foregroundColor(.primary)
+                            // This banner sits on bgGradient, which is fixed DARK in
+                            // both appearances, so system-adaptive colors render
+                            // BLACK here in light mode — the app's default. These
+                            // are the validation pipeline's safety cautions, and at
+                            // ~1.1:1 they were invisible to most users.
+                            .foregroundColor(AppColors.textOnDark)
                     }
                 }
                 ForEach(Array(cautionWarnings.enumerated()), id: \.offset) { _, warning in
                     Text("• \(warning.message)")
                         .font(AppFonts.caption)
-                        .foregroundColor(hasHighPriority ? .white.opacity(0.9) : .secondary)
+                        .foregroundColor(hasHighPriority ? AppColors.ctaText.opacity(0.9) : AppColors.textOnDarkMuted)
                 }
             }
         }
@@ -973,9 +983,10 @@ struct RehabPlanView: View {
                 Spacer()
                 Text("Track your weekly progress")
                     .font(AppFonts.caption)
-                    .foregroundColor(AppColors.primaryText.opacity(0.7))
+                    .foregroundColor(AppColors.textOnAccentMuted)
             }
-            .foregroundColor(AppColors.primaryText)
+            // healingGradient is teal in BOTH appearances — fixed on-color.
+            .foregroundColor(AppColors.textOnAccent)
             .padding(AppSpacing.lg)
             .background(AppColors.healingGradient)
             .cornerRadius(AppCorners.card)

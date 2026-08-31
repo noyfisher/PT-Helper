@@ -51,7 +51,14 @@ enum CoilPalette {
     static let textMuted     = dyn(hex(0x7A8A8D), hex(0x6E8285))
 
     // Semantics — decoupled from the brand hue
-    static let errorRed = dyn(hex(0xD64541), hex(0xF0736E))
+    // Both variants darkened for AA against the FIXED-white `ctaText` they are
+    // always paired with: dark was #F0736E at 2.84:1 (badly failing on the
+    // red-flag safety notice, offline banner and emergency screens) and light
+    // was #D64541 at 4.39:1, marginally under. Now 4.93:1 and 4.80:1, and both
+    // still read clearly as an alert against their page (4.50:1 / 3.84:1).
+    // Hue-preserving and strictly higher contrast, so the ~66 danger call sites
+    // change only in that direction.
+    static let errorRed = dyn(hex(0xC93F3B), hex(0xCB4238))
     static let success  = dyn(hex(0x1E874B), hex(0x3FBE77))
     static let warning  = dyn(hex(0xC67A00), hex(0xE8A73B))
     static let infoBlue = dyn(hex(0x2E74C7), hex(0x5DA0E8))
@@ -76,6 +83,13 @@ enum AppColors {
     static let mutedText      = Color(CoilPalette.textMuted)
     static let textOnDark      = Color.white
     static let textOnDarkMuted = Color.white.opacity(0.6)
+    /// On-color for the FIXED teal surfaces (coolGradient / healingGradient /
+    /// accent fills). Those gradients stay teal in both appearances, so their
+    /// on-color must be fixed too. It is near-black rather than white because
+    /// the brand teal is light: white lands at 1.6–2.5:1 on the bright stops
+    /// while this reads 6.9–11.1:1.
+    static let textOnAccent      = Color(CoilPalette.inkDeep)
+    static let textOnAccentMuted = Color(CoilPalette.inkDeep).opacity(0.75)
 
     // MARK: Surfaces
     static let cardBackground  = Color(CoilPalette.card)
@@ -726,7 +740,11 @@ struct ChipButton: View {
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(isSelected ? AppColors.chipSelectedBorder : Color.black.opacity(0.15), lineWidth: 1.5)
+                        // Was Color.black@15% — invisible against the dark card in
+                        // dark mode, leaving unselected chips with no tappable
+                        // boundary at all (the fill is clear). subtleBorder is the
+                        // adaptive hairline meant for exactly this.
+                        .stroke(isSelected ? AppColors.chipSelectedBorder : AppColors.subtleBorder, lineWidth: 1.5)
                 )
         }
         // Selection was conveyed by color alone — announce it to VoiceOver and

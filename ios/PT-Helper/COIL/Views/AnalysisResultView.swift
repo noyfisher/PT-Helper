@@ -142,12 +142,15 @@ struct AnalysisResultView: View {
                     .foregroundColor(AppColors.warning)
                 Text("Things to Keep in Mind")
                     .font(AppFonts.bodySemiBold)
-                    .foregroundColor(AppColors.primaryText)
+                    // On bgGradient (fixed dark in both appearances) — adaptive
+                    // text tokens go black here in light mode, hiding the AI
+                    // safety caveats entirely. See the same fix in RehabPlanView.
+                    .foregroundColor(AppColors.textOnDark)
             }
             ForEach(Array(cautionWarnings.enumerated()), id: \.offset) { _, warning in
                 Text("• \(warning.message)")
                     .font(AppFonts.caption)
-                    .foregroundColor(AppColors.secondaryText)
+                    .foregroundColor(AppColors.textOnDarkMuted)
             }
         }
         .padding()

@@ -162,7 +162,9 @@ struct RootView: View {
 
                         Text("Loading your profile...")
                             .font(.subheadline)
-                            .foregroundColor(AppColors.secondaryText)
+                            // Bare text on the fixed-dark bgGradient — the first
+                            // thing a returning user sees on every cold launch.
+                            .foregroundColor(AppColors.textOnDarkMuted)
                     }
                 }
             } else if profileCompleted || skippedOnboarding {
