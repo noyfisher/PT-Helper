@@ -9,7 +9,7 @@ import { runFormAnalysisAgent, validateFormResult } from "./form-agent";
 import { handleGenerateExerciseImage } from "./image-generation";
 import { deleteUserFirestoreData } from "./account-deletion";
 import { RequestContext, newRequestContext, logCompleted, logError, logWarn } from "./logger";
-import { validateClaudeResponse } from "./response-schemas";
+import { validateClaudeResponse, crossVerifySchema, CrossVerifyResponse } from "./response-schemas";
 import { validateNightlyReport } from "./nightly-report-validator";
 import { EXERCISE_CATALOG_CSV } from "./generated/exerciseCatalog";
 import { SYSTEM_PROMPTS, MODEL_CONFIG, MINOR_SAFETY_PROMPT } from "./prompts";
@@ -212,6 +212,40 @@ async function decrementQuota(uid: string): Promise<void> {
 // Dev value is sized to survive virtual-user batches / manual QA without
 // tripping the 429 ceiling; denial-of-wallet is a prod concern and dev has no
 // public account minting.
+
+async function decrementGlobalDailyBudget(): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  const ref = admin.firestore().collection(AI_BUDGET_COLLECTION).doc(AI_BUDGET_DOC_ID);
+  try {
+    await admin.firestore().runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const data = snap.data() || {};
+      // Only refund within the same UTC day the slot was taken; after rollover
+      // the counter has already reset and a refund would push it negative.
+      if (data.date === today && typeof data.count === "number" && data.count > 0) {
+        tx.update(ref, { count: data.count - 1 });
+      }
+    });
+  } catch (err) {
+    // Best-effort, exactly like decrementQuota: a failed refund must never turn
+    // into a failed request for the user.
+    console.error("Global budget refund failed:", err);
+  }
+}
+
+/**
+ * Release BOTH cost counters for a call that consumed no provider capacity.
+ *
+ * The per-user quota had a refund path; the shared global budget did not, so
+ * every rejected-after-admission request permanently burned one of the 200
+ * daily slots shared by all users. Keeping the two in lockstep is what stops
+ * them drifting apart.
+ */
+async function refundAiCall(uid: string): Promise<void> {
+  await decrementQuota(uid);
+  await decrementGlobalDailyBudget();
+}
 
 async function checkGlobalDailyBudget(): Promise<boolean> {
   const today = new Date().toISOString().slice(0, 10);
@@ -554,13 +588,6 @@ export const claudeProxy = functions
       return;
     }
 
-    // Global daily AI spend ceiling (denial-of-wallet guard). Per-user quotas
-    // are bypassable by minting identities; this caps total paid AI calls/day.
-    // Checked AFTER validation so malformed requests don't consume it (P1-07).
-    if (!(await checkGlobalDailyBudget())) {
-      res.status(429).json({ error: "daily_capacity_reached" });
-      return;
-    }
 
     // -----------------------------------------------------------------------
     // 4. Get Anthropic API key from environment
@@ -591,6 +618,21 @@ export const claudeProxy = functions
         error: `${quota.reason === "daily" ? "Daily" : "Monthly"} usage limit reached (${quota.limit}). Please try again ${quota.reason === "daily" ? "tomorrow" : "next month"}.`,
         quotaReason: quota.reason,
       });
+      return;
+    }
+
+    // Global daily AI spend ceiling (denial-of-wallet guard). Shared counter.
+    //
+    // Taken LAST, after eligibility, rate limit, body validation and the
+    // per-user quota have all passed — i.e. only for a call that is actually
+    // about to reach a provider. It used to run first, so a malformed body or
+    // an over-quota user still burned one of the 200 slots shared by every
+    // user, at zero provider cost: one account could exhaust the day's AI
+    // capacity for the whole cohort in ~10 minutes. Quota is refunded here
+    // because it was incremented immediately above.
+    if (!(await checkGlobalDailyBudget())) {
+      await decrementQuota(uid);
+      res.status(429).json({ error: "daily_capacity_reached" });
       return;
     }
 
@@ -662,7 +704,7 @@ export const claudeProxy = functions
 
       if (!anthropicResponse.ok) {
         // Refund quota — user didn't get a usable response.
-        await decrementQuota(uid);
+        await refundAiCall(uid);
         // Error envelopes carry no usage — record zeros so the call still
         // counts toward the daily error rate.
         await recordAiUsage({
@@ -755,7 +797,7 @@ export const claudeProxy = functions
       res.status(200).json(responseData);
     } catch (error) {
       // Fetch threw (network error, timeout, etc.) — refund quota.
-      await decrementQuota(uid);
+      await refundAiCall(uid);
       if (providerStartedAt > 0) {
         // Only record when the provider call was actually attempted.
         await recordAiUsage({
@@ -836,11 +878,6 @@ export const crossVerify = functions
       return;
     }
 
-    // Global daily AI spend ceiling (denial-of-wallet guard). Shared counter.
-    if (!(await checkGlobalDailyBudget())) {
-      res.status(429).json({ error: "daily_capacity_reached" });
-      return;
-    }
 
     // -----------------------------------------------------------------------
     // 3. Validate request
@@ -899,6 +936,21 @@ export const crossVerify = functions
       return;
     }
 
+    // Global daily AI spend ceiling (denial-of-wallet guard). Shared counter.
+    //
+    // Taken LAST, after eligibility, rate limit, body validation and the
+    // per-user quota have all passed — i.e. only for a call that is actually
+    // about to reach a provider. It used to run first, so a malformed body or
+    // an over-quota user still burned one of the 200 slots shared by every
+    // user, at zero provider cost: one account could exhaust the day's AI
+    // capacity for the whole cohort in ~10 minutes. Quota is refunded here
+    // because it was incremented immediately above.
+    if (!(await checkGlobalDailyBudget())) {
+      await decrementQuota(uid);
+      res.status(429).json({ error: "daily_capacity_reached" });
+      return;
+    }
+
     // -----------------------------------------------------------------------
     // 5. Call GPT-4o-mini for each exercise (batched in one prompt)
     // -----------------------------------------------------------------------
@@ -920,6 +972,7 @@ For EACH exercise, respond with a JSON object in this exact format:
 {
   "results": [
     {
+      "index": 1,
       "safe": true/false,
       "confidence": 0.0-1.0,
       "reasoning": "brief explanation (1-2 sentences)",
@@ -928,7 +981,10 @@ For EACH exercise, respond with a JSON object in this exact format:
   ]
 }
 
-Return results in the same order as the exercises listed above.`;
+Return exactly one result per exercise, in the same order as the exercises listed
+above. "index" MUST be the number shown next to that exercise in the list (1-based).
+Do not omit, merge, reorder or add entries — the count and the indices must match
+the list exactly.`;
 
       // AI usage telemetry (Phase 1): 0 means "provider not called yet", so the
       // catch below can distinguish a provider failure from a pre-provider one.
@@ -959,7 +1015,7 @@ Return results in the same order as the exercises listed above.`;
 
       if (!openaiResponse.ok) {
         const errorData = await openaiResponse.text();
-        await decrementQuota(uid);
+        await refundAiCall(uid);
         await recordAiUsage({
           fn: "crossVerify",
           requestType: "cross_verify",
@@ -993,7 +1049,7 @@ Return results in the same order as the exercises listed above.`;
 
       if (!content) {
         // Upstream delivered nothing useful — refund quota.
-        await decrementQuota(uid);
+        await refundAiCall(uid);
         await recordAiUsage({
           ...crossVerifyUsage,
           durationMs: Date.now() - providerStartedAt,
@@ -1003,8 +1059,54 @@ Return results in the same order as the exercises listed above.`;
         return;
       }
 
-      // Parse the GPT response and forward to client
-      const parsed = JSON.parse(content);
+      // Validate BEFORE forwarding. The client pairs verdicts to exercises
+      // positionally, so a dropped or reordered result silently attributes a
+      // safety verdict to the wrong exercise — an exercise the model flagged as
+      // unsafe could surface as verified. Fail closed: a malformed safety
+      // response is treated exactly like no response at all.
+      const parsedRaw: unknown = JSON.parse(content);
+      const validated = crossVerifySchema.safeParse(parsedRaw);
+
+      let indexProblem: string | null = null;
+      let orderedResults: CrossVerifyResponse["results"] = [];
+      if (!validated.success) {
+        indexProblem = validated.error.issues[0]?.message || "schema mismatch";
+      } else {
+        const results = validated.data.results;
+        if (results.length !== body.exercises.length) {
+          indexProblem = `expected ${body.exercises.length} results, got ${results.length}`;
+        } else {
+          const seen = new Set<number>();
+          for (const r of results) {
+            if (r.index < 1 || r.index > body.exercises.length) {
+              indexProblem = `index ${r.index} out of range`;
+              break;
+            }
+            if (seen.has(r.index)) {
+              indexProblem = `duplicate index ${r.index}`;
+              break;
+            }
+            seen.add(r.index);
+          }
+          // Re-order into request order so the client's positional pairing is
+          // correct by construction even for a valid permutation.
+          if (!indexProblem) orderedResults = [...results].sort((a, b) => a.index - b.index);
+        }
+      }
+
+      if (indexProblem) {
+        await refundAiCall(uid);
+        await recordAiUsage({
+          ...crossVerifyUsage,
+          durationMs: Date.now() - providerStartedAt,
+          status: "invalid_response",
+        });
+        logError(ctx, new Error(`crossVerify response rejected: ${indexProblem}`), { stage: "response_validation" });
+        res.status(502).json({ error: "ai_response_invalid" });
+        return;
+      }
+
+      const parsed = { results: orderedResults };
       await recordAiUsage({
         ...crossVerifyUsage,
         durationMs: Date.now() - providerStartedAt,
@@ -1013,7 +1115,7 @@ Return results in the same order as the exercises listed above.`;
       res.status(200).json(parsed);
     } catch (error) {
       // Fetch threw or JSON.parse of response threw — refund quota.
-      await decrementQuota(uid);
+      await refundAiCall(uid);
       if (providerStartedAt > 0) {
         // Only record when the provider call was actually attempted.
         await recordAiUsage({
@@ -1056,6 +1158,16 @@ export const deleteAccount = functions
       const decoded = await admin.auth().verifyIdToken(authHeader.split("Bearer ")[1]);
       uid = decoded.uid;
       ctx.uid = uid;
+      // NOTE (deferred, tracked): deletion accepts any valid ID token, so a
+      // token leaked within its ~1h lifetime can destroy the account. The fix is
+      // an `auth_time` recency check HERE PLUS a real client reauthentication —
+      // and only together. `getIDToken(forcingRefresh:)` does NOT advance
+      // `auth_time`, so a server-side check alone would 401 every deletion, the
+      // client's refresh-and-retry would 401 again, and account deletion would
+      // break for every user signed in more than a few minutes ago — a
+      // compliance failure strictly worse than the risk it closes. Landing this
+      // needs `user.reauthenticate(with:)` re-running the Apple/Google provider
+      // flow from SettingsView before the call.
     } catch {
       res.status(401).json({ error: "Invalid Firebase ID token" });
       return;
@@ -1098,6 +1210,18 @@ export const createVirtualUserToken = functions.https.onRequest(async (req, res)
   // through to the secret gate, which still protects the endpoint.
   const proj = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT;
   if (proj && proj !== "pt-helper-dev") {
+    res.status(404).send("Not found");
+    return;
+  }
+
+  // Default-deny. The project guard above is NOT sufficient for an external
+  // round: that round runs against pt-helper-dev, so the guard never fires and
+  // this token minter sits live on the backend real testers use, gated only by
+  // a shared secret. Each minted vuser is also a fresh per-user quota bucket,
+  // which multiplies the shared-budget exhaustion this same commit fixes.
+  // The harness sets VIRTUAL_USER_TOKENS_ENABLED=true explicitly; a normal
+  // deploy leaves it unset and the endpoint does not exist.
+  if (process.env.VIRTUAL_USER_TOKENS_ENABLED !== "true") {
     res.status(404).send("Not found");
     return;
   }
@@ -1885,11 +2009,6 @@ export const agentInsights = functions
       return;
     }
 
-    // Global daily AI spend ceiling (denial-of-wallet guard). Shared counter.
-    if (!(await checkGlobalDailyBudget())) {
-      res.status(429).json({ error: "daily_capacity_reached" });
-      return;
-    }
 
     // 3. Fetch user data from Firestore
     let data;
@@ -1927,6 +2046,21 @@ export const agentInsights = functions
         error: `${insightsQuota.reason === "daily" ? "Daily" : "Monthly"} usage limit reached (${insightsQuota.limit}). Please try again ${insightsQuota.reason === "daily" ? "tomorrow" : "next month"}.`,
         quotaReason: insightsQuota.reason,
       });
+      return;
+    }
+
+    // Global daily AI spend ceiling (denial-of-wallet guard). Shared counter.
+    //
+    // Taken LAST, after eligibility, rate limit, body validation and the
+    // per-user quota have all passed — i.e. only for a call that is actually
+    // about to reach a provider. It used to run first, so a malformed body or
+    // an over-quota user still burned one of the 200 slots shared by every
+    // user, at zero provider cost: one account could exhaust the day's AI
+    // capacity for the whole cohort in ~10 minutes. Quota is refunded here
+    // because it was incremented immediately above.
+    if (!(await checkGlobalDailyBudget())) {
+      await decrementQuota(uid);
+      res.status(429).json({ error: "daily_capacity_reached" });
       return;
     }
 
@@ -2132,11 +2266,6 @@ export const agentFormAnalysis = functions
       return;
     }
 
-    // Global daily AI spend ceiling (denial-of-wallet guard). Shared counter.
-    if (!(await checkGlobalDailyBudget())) {
-      res.status(429).json({ error: "daily_capacity_reached" });
-      return;
-    }
 
     // 3. Validate request body — the CURRENT session's metrics travel in the
     // body (they are not in Firestore yet; iOS persists after feedback).
@@ -2187,6 +2316,21 @@ export const agentFormAnalysis = functions
         error: `${formQuota.reason === "daily" ? "Daily" : "Monthly"} usage limit reached (${formQuota.limit}). Please try again ${formQuota.reason === "daily" ? "tomorrow" : "next month"}.`,
         quotaReason: formQuota.reason,
       });
+      return;
+    }
+
+    // Global daily AI spend ceiling (denial-of-wallet guard). Shared counter.
+    //
+    // Taken LAST, after eligibility, rate limit, body validation and the
+    // per-user quota have all passed — i.e. only for a call that is actually
+    // about to reach a provider. It used to run first, so a malformed body or
+    // an over-quota user still burned one of the 200 slots shared by every
+    // user, at zero provider cost: one account could exhaust the day's AI
+    // capacity for the whole cohort in ~10 minutes. Quota is refunded here
+    // because it was incremented immediately above.
+    if (!(await checkGlobalDailyBudget())) {
+      await decrementQuota(uid);
+      res.status(429).json({ error: "daily_capacity_reached" });
       return;
     }
 

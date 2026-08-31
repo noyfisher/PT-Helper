@@ -301,9 +301,15 @@ class CrossModelVerificationService: CrossModelVerifying {
             throw CrossModelError.decodingError
         }
 
-        // Handle single exercise response
+        // Handle single exercise response. Gated on a single requested exercise:
+        // a bare top-level object carries no identity, so accepting it for a
+        // multi-exercise batch would attribute one verdict to the first exercise
+        // and silently drop the rest.
         if let safe = json["safe"] as? Bool {
-            guard let firstExercise = exercises.first else { throw CrossModelError.decodingError }
+            guard exercises.count == 1, let firstExercise = exercises.first else {
+                logger.error("Cross-model returned a single-object response for \(exercises.count) exercises — rejecting")
+                throw CrossModelError.decodingError
+            }
             return [CrossModelResult(
                 exerciseName: firstExercise.name,
                 conditionName: firstExercise.condition,
@@ -319,7 +325,46 @@ class CrossModelVerificationService: CrossModelVerifying {
             throw CrossModelError.decodingError
         }
 
-        return zip(results, exercises).map { (result, exercise) in
+        // Verdicts are paired to exercises POSITIONALLY, so a response that
+        // drops, adds or reorders an entry silently attributes a safety verdict
+        // to the wrong exercise — `zip` would truncate to the shorter side and
+        // shift everything after the omission. The server now validates and
+        // re-orders by an echoed 1-based `index`; these guards are the client's
+        // own fail-closed check, because a wrong verdict is worse than none.
+        guard results.count == exercises.count else {
+            logger.error("Cross-model result count \(results.count) != \(exercises.count) requested — rejecting")
+            throw CrossModelError.decodingError
+        }
+
+        // Honour the echoed index when present (accepting a stringified number,
+        // which some models emit), and fail closed on anything malformed rather
+        // than defaulting — a silently defaulted index would reintroduce exactly
+        // the misattribution these guards exist to prevent.
+        var ordered = results
+        if results.contains(where: { $0["index"] != nil }) {
+            var byIndex = [Int: [String: Any]]()
+            for result in results {
+                let parsedIndex: Int?
+                if let value = result["index"] as? Int {
+                    parsedIndex = value
+                } else if let text = result["index"] as? String, let value = Int(text) {
+                    parsedIndex = value
+                } else {
+                    parsedIndex = nil
+                }
+                guard let index = parsedIndex, (1...exercises.count).contains(index), byIndex[index] == nil else {
+                    logger.error("Cross-model response carried a missing/duplicate/out-of-range index — rejecting")
+                    throw CrossModelError.decodingError
+                }
+                byIndex[index] = result
+            }
+            ordered = (1...exercises.count).compactMap { byIndex[$0] }
+            guard ordered.count == exercises.count else {
+                throw CrossModelError.decodingError
+            }
+        }
+
+        return zip(ordered, exercises).map { (result, exercise) in
             CrossModelResult(
                 exerciseName: exercise.name,
                 conditionName: exercise.condition,

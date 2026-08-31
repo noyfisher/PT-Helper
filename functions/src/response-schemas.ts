@@ -15,8 +15,9 @@
  * - `recovery_insights`: validated by `validateInsightResult` in managed-agent.ts
  *   (and again client-side in Tier 1).
  * - `nightly_report`: markdown output, not JSON.
- * - `cross_verify`: validated inside the `crossVerify` function (separate function,
- *   not routed through `claudeProxy`).
+ * - `cross_verify`: has its own schema below (`crossVerifySchema`), applied inside
+ *   the `crossVerify` function — it is a separate endpoint, not routed through
+ *   `claudeProxy`, so it is not in the dispatch table.
  */
 
 import { z } from "zod";
@@ -166,9 +167,37 @@ export const wellnessVerifySchema = wellnessAnalysisSchema;
 // Dispatch table ------------------------------------------------------------
 
 /**
+ * Cross-model verification response.
+ *
+ * `index` is a 1-based echo of the position in the request's exercise list. It
+ * exists because the client pairs verdicts to exercises POSITIONALLY: without an
+ * echoed identity, a model that drops or reorders one result silently shifts
+ * every later verdict onto the wrong exercise — an exercise flagged unsafe can
+ * be recorded as verified. Length alone catches drops but not reordering.
+ *
+ * Deliberately strict, and deliberately NOT following the lenient-default style
+ * used for `confidence` elsewhere in this file: a silently defaulted index would
+ * reintroduce exactly the misattribution this schema exists to prevent. The
+ * caller additionally checks that the indices are unique and cover
+ * `1...exercises.length` exactly, which a per-element schema cannot express.
+ */
+export const crossVerifySchema = z.object({
+  results: z.array(z.object({
+    index: z.number().int().positive(),
+    safe: z.boolean(),
+    confidence: z.number().min(0).max(1).optional(),
+    reasoning: z.string().optional(),
+    concerns: z.array(z.string()).optional(),
+  })).min(1),
+});
+
+export type CrossVerifyResponse = z.infer<typeof crossVerifySchema>;
+
+/**
  * Per-requestType schemas. A requestType not present here is NOT validated — that's
- * intentional for `recovery_insights`, `nightly_report`, and `cross_verify`, which
- * have dedicated validation elsewhere.
+ * intentional for `recovery_insights` and `nightly_report`, which have dedicated
+ * validation elsewhere. `cross_verify` has `crossVerifySchema` above, applied in
+ * its own endpoint rather than through this table.
  */
 export const RESPONSE_SCHEMAS: Record<string, z.ZodTypeAny> = {
   analysis: analysisSchema,

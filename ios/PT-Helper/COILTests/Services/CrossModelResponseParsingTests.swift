@@ -153,3 +153,105 @@ final class CrossModelResponseParsingTests: XCTestCase {
         XCTAssertThrowsError(try service.parseCrossModelResponse(data("[]"), exercises: onePair))
     }
 }
+
+// MARK: - Positional-misalignment guards (H1)
+
+extension CrossModelResponseParsingTests {
+
+    private var twoPairs: [(name: String, condition: String)] {
+        [(name: "Wall Sits", condition: "patellofemoral pain syndrome"),
+         (name: "Deep Squat", condition: "acl sprain")]
+    }
+
+    private var threePairs: [(name: String, condition: String)] {
+        twoPairs + [(name: "Step Ups", condition: "meniscus tear")]
+    }
+
+    /// The core defect: verdicts are paired to exercises by POSITION, so a
+    /// response that omits one entry shifts every later verdict onto the wrong
+    /// exercise. `zip` silently truncated instead of failing.
+    func testBatched_fewerResultsThanExercises_throwsInsteadOfMisattributing() {
+        let json = """
+        {"results":[{"index":1,"safe":false,"reasoning":"unsafe for ACL"}]}
+        """
+        XCTAssertThrowsError(try service.parseCrossModelResponse(data(json), exercises: twoPairs),
+                             "A short results array must be rejected, not zipped onto the wrong exercises")
+    }
+
+    func testBatched_moreResultsThanExercises_throws() {
+        let json = """
+        {"results":[{"index":1,"safe":true},{"index":2,"safe":true},{"index":3,"safe":false}]}
+        """
+        XCTAssertThrowsError(try service.parseCrossModelResponse(data(json), exercises: twoPairs))
+    }
+
+    /// Length alone cannot catch reordering — only the echoed index can.
+    func testBatched_reorderedResults_areRealignedByIndex() throws {
+        let json = """
+        {"results":[
+          {"index":2,"safe":false,"reasoning":"unsafe for ACL"},
+          {"index":1,"safe":true,"reasoning":"fine for PFPS"}
+        ]}
+        """
+        let results = try service.parseCrossModelResponse(data(json), exercises: twoPairs)
+
+        XCTAssertEqual(results.count, 2)
+        XCTAssertEqual(results[0].exerciseName, "Wall Sits")
+        XCTAssertTrue(results[0].isSafe, "Index 1 belongs to Wall Sits regardless of array order")
+        XCTAssertEqual(results[1].exerciseName, "Deep Squat")
+        XCTAssertFalse(results[1].isSafe, "The unsafe verdict must land on Deep Squat, not Wall Sits")
+    }
+
+    func testBatched_stringifiedIndex_isAccepted() throws {
+        let json = """
+        {"results":[{"index":"2","safe":false},{"index":"1","safe":true}]}
+        """
+        let results = try service.parseCrossModelResponse(data(json), exercises: twoPairs)
+        XCTAssertEqual(results[0].exerciseName, "Wall Sits")
+        XCTAssertTrue(results[0].isSafe)
+        XCTAssertFalse(results[1].isSafe)
+    }
+
+    func testBatched_duplicateIndex_throws() {
+        let json = """
+        {"results":[{"index":1,"safe":true},{"index":1,"safe":false}]}
+        """
+        XCTAssertThrowsError(try service.parseCrossModelResponse(data(json), exercises: twoPairs))
+    }
+
+    func testBatched_outOfRangeIndex_throws() {
+        let json = """
+        {"results":[{"index":1,"safe":true},{"index":7,"safe":false}]}
+        """
+        XCTAssertThrowsError(try service.parseCrossModelResponse(data(json), exercises: twoPairs))
+    }
+
+    /// A partially-indexed response is malformed; defaulting the missing ones
+    /// would reintroduce the misattribution the index exists to prevent.
+    func testBatched_partiallyMissingIndex_throws() {
+        let json = """
+        {"results":[{"index":1,"safe":true},{"safe":false}]}
+        """
+        XCTAssertThrowsError(try service.parseCrossModelResponse(data(json), exercises: twoPairs))
+    }
+
+    /// Back-compat: a correctly-ordered response with no index at all still maps
+    /// positionally, so the client keeps working against an un-migrated server.
+    func testBatched_noIndexField_mapsPositionallyWhenCountMatches() throws {
+        let json = """
+        {"results":[{"safe":true},{"safe":false},{"safe":true}]}
+        """
+        let results = try service.parseCrossModelResponse(data(json), exercises: threePairs)
+        XCTAssertEqual(results.map(\.exerciseName), ["Wall Sits", "Deep Squat", "Step Ups"])
+        XCTAssertEqual(results.map(\.isSafe), [true, false, true])
+    }
+
+    /// A bare single-object response carries no identity, so accepting it for a
+    /// batch would attribute one verdict to the first exercise and drop the rest.
+    func testSingleObjectShape_forMultipleExercises_throws() {
+        let json = """
+        {"safe":false,"reasoning":"unsafe"}
+        """
+        XCTAssertThrowsError(try service.parseCrossModelResponse(data(json), exercises: twoPairs))
+    }
+}
