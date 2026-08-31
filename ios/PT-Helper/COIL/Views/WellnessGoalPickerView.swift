@@ -5,6 +5,16 @@ struct WellnessGoalPickerView: View {
     @State private var selectedCategories: Set<GoalCategory> = []
     @State private var customGoalText: String = ""
     @State private var showDetailView = false
+    /// Stable ViewModel for the wellness flow — created BEFORE the navigation
+    /// flag is set, cleaned up when navigation pops back. It was previously
+    /// constructed inside the navigationDestination content closure and held as
+    /// @ObservedObject, so every re-render of this view handed the pushed screen
+    /// a brand-new ViewModel: goal index back to 0, saved per-goal assessments
+    /// gone, any in-flight analysis orphaned. This view lives inside
+    /// ThreeTabView's fullScreenCover, which re-renders whenever any of its five
+    /// shared @StateObjects publish — a NetworkMonitor flap or a Firestore plans
+    /// snapshot mid-assessment was enough. Same pattern as BodyMap3DView.
+    @State private var wellnessVM: WellnessAnalysisViewModel?
     /// MHMDA health-data consent gate (shown before the wellness detail flow).
     @State private var showHealthConsent = false
     @State private var showWellnessDisclaimer = false
@@ -45,7 +55,12 @@ struct WellnessGoalPickerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .coilNavBar()
         .navigationDestination(isPresented: $showDetailView) {
-            WellnessDetailView(viewModel: createViewModel())
+            if let wellnessVM {
+                WellnessDetailView(viewModel: wellnessVM)
+            }
+        }
+        .onChange(of: showDetailView) { _, navigating in
+            if !navigating { wellnessVM = nil }
         }
         .sheet(isPresented: $showHealthConsent, onDismiss: {
             // After consent, continue the gate chain: disclaimer next, then detail
@@ -53,6 +68,7 @@ struct WellnessGoalPickerView: View {
             if ConsentService.shared.hasHealthDataConsent && !DisclaimerManager.hasAccepted {
                 showWellnessDisclaimer = true
             } else if ConsentService.shared.hasHealthDataConsent {
+                wellnessVM = createViewModel()
                 showDetailView = true
             }
         }) {
@@ -61,7 +77,10 @@ struct WellnessGoalPickerView: View {
                 onNotNow: { showHealthConsent = false })
         }
         .sheet(isPresented: $showWellnessDisclaimer) {
-            DisclaimerView(onAccept: { showDetailView = true })
+            DisclaimerView(onAccept: {
+                wellnessVM = createViewModel()
+                showDetailView = true
+            })
         }
         .trackScreen("WellnessGoalPicker")
     }
@@ -188,6 +207,7 @@ struct WellnessGoalPickerView: View {
             } else if !DisclaimerManager.hasAccepted {
                 showWellnessDisclaimer = true
             } else {
+                wellnessVM = createViewModel()
                 showDetailView = true
             }
         }) {

@@ -76,6 +76,29 @@ struct WellnessDetailView: View {
                 }
             }
         }
+        .onChange(of: destination) { _, newValue in
+            // Popping back from the results screen must also tear down the
+            // analyzing screen. startAnalysis sets showAnalyzingScreen = true and
+            // the success path never clears it, so returning here re-rendered
+            // WellnessAnalyzingView with no work in flight: a spinner that never
+            // resolves, with the back button hidden, no Cancel (it only shows
+            // while isAnalyzing), and the cover's X living on the stack root —
+            // force-quit was the only way out, on the ordinary happy path of
+            // every wellness assessment.
+            //
+            // Ported verbatim from AnalyzingView, INCLUDING the Task/yield/sleep
+            // ordering: mutating a second navigation binding inside the same
+            // transaction crashes with a simultaneous-state-mutation error.
+            if newValue == nil {
+                viewModel.analysisResult = nil
+                Task { @MainActor in
+                    await Task.yield()
+                    await Task.yield()
+                    try? await Task.sleep(for: .milliseconds(50))
+                    viewModel.showAnalyzingScreen = false
+                }
+            }
+        }
         .onAppear { restoreFormState() }
         .onChange(of: viewModel.analysisResult?.id) { _, newValue in
             if newValue != nil { destination = .result }
