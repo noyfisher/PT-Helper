@@ -1,5 +1,10 @@
 # Security Fixes — Implementation Plan (2026-06-10, rev 2)
 
+> **Status: EXECUTED.** This plan was carried out; it is kept as the record of how the June findings were
+> closed. Outcomes — including the two items that needed a second pass — are in
+> **[Outcome (updated 2026-08-31)](#outcome-updated-2026-08-31)** at the end. Current status of the
+> underlying findings lives in `ios/PT-Helper/docs/security-review-2026-06-10.md`.
+
 Derived from `ios/PT-Helper/docs/security-review-2026-06-10.md`. Branch `form-analysis-agent`. Pre-production (nothing deployed to prod; `.firebaserc` default = `pt-helper-dev`). **Rev 2 incorporates the plan-audit findings (see Audit Results at bottom) — all code facts below verified against the tree.**
 
 ## Wave 1 — iOS client (verify: `xcodebuild build`)
@@ -92,3 +97,57 @@ Three coordinated parts (per audit, all three are required or the fix is cosmeti
 - Non-breaking notes: `streakData` also writes `achievements`/`lastWorkoutDate` (fine — no `hasOnly`).
 
 **Overall: MINOR CONCERNS (cleared to build).**
+
+
+---
+
+## Outcome (updated 2026-08-31)
+
+Verified against the tree on 2026-08-31 rather than from memory.
+
+| Item | Finding | Outcome |
+|---|---|---|
+| A1 | P1-5 launch-arg flags | **Done** — every flag `#if DEBUG`-gated, `false` in release |
+| A2 | P2-5 video deletion | **Done** — `defer` remove in `analyzeVideo` |
+| A3 | P2-4 file protection | **Done** — analysis store + onboarding draft migrated to `.completeFileProtection` |
+| B1 | P1-1 token minter | **Done, then extended** — see below |
+| B2 | P1-2 global spend cap | **Done, then corrected** — see below |
+| B3 | P2-2 agent-input sanitising | **Done** — `sanitizeForPrompt`, `<prior_data>` delimiters, `validateInsightResult` on the fallback |
+| B4 | P2-6 `patientContext` cap | **Done** — 4000-char cap, 200-char clamp per exercise string |
+| B5 | P3 error envelopes | **Done** — generic `ai_service_error`, detail logged server-side |
+| C1 | P1-4 bounded agent-consumed fields | **Done** — schema-bounded `formAnalyses` + `streakData` |
+| C2 | P2-1 `missingExerciseImages` | **Partial** — write constrained, read still open; see below |
+| C3 | P3 rules cleanup | **Done** — `sessionLogs` append-only, `config` readable, telemetry rules added |
+
+Excluded items are still excluded and still open: **P1-3 App Check**, **GCP API-key restrictions**
+(console-only), P2-3 catalogue enforcement, red-flag fuzzy matching, and the in-memory image limiter.
+
+### The two that needed a second pass
+
+Both are worth recording because in each case the control was built as specified and something *around*
+it defeated it — the kind of thing a plan-level review does not catch.
+
+**B1 — the dev-project guard was necessary but not sufficient.** The guard returns 404 when
+`GCLOUD_PROJECT !== "pt-helper-dev"`, which reads as "blocked outside dev". But the first external test
+round runs *on* `pt-helper-dev`, so the guard never fires and the token minter was live on the backend
+real testers use, gated only by the shared secret. A control scoped to "not production" does nothing when
+the risky deployment is the non-production one. Now default-deny behind an explicit
+`VIRTUAL_USER_TOKENS_ENABLED` flag, so a normal deploy does not expose it at all.
+
+**B2 — the counter was correct but mis-ordered, and had no refund.** This plan says "Call after
+`isRateLimited` passes", which is where it went — but that is *before* body validation and before the
+per-user quota. Combined with the deliberate increment-on-admit semantics and no decrement path, a
+request rejected for being malformed or over-quota still consumed one of the shared daily slots at zero
+provider cost, so a single account could exhaust the whole cohort's AI capacity in about ten minutes.
+The check now runs last, only for a call actually about to reach a provider, and the global counter is
+released alongside the per-user quota on every no-useful-response path.
+
+Also note the ceiling shipped at `AI_DAILY_BUDGET = 200`, not the `2000` this plan drafted; the
+"**TUNE WITH USER before merge**" note is still outstanding for the external round.
+
+**C2 — the accepted residual grew a consequence.** This plan explicitly accepted that "distinct-key doc
+spam is not fully stopped by rules". A later review found the same unconstrained `create` also lets a
+client forge the fields that `generateExerciseImage` uses as its **distributed generation lock**, so a
+user can block generation for a given exercise. Still low impact — no PII, and the image catalogue is
+complete so on-demand generation rarely runs — but it is a good illustration of an accepted residual
+becoming load-bearing once another feature starts depending on the same document.
