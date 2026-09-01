@@ -142,8 +142,11 @@ provider cost, so a single account could exhaust the whole cohort's AI capacity 
 The check now runs last, only for a call actually about to reach a provider, and the global counter is
 released alongside the per-user quota on every no-useful-response path.
 
-Also note the ceiling shipped at `AI_DAILY_BUDGET = 200`, not the `2000` this plan drafted; the
-"**TUNE WITH USER before merge**" note is still outstanding for the external round.
+The ceiling shipped at `AI_DAILY_BUDGET = 200` rather than the `2000` this plan drafted, and that
+plan's "**TUNE WITH USER before merge**" note is now **settled: 200 is the intended value** (decided
+2026-08-31). It is also worth more than the same number would have been before the ordering fix above:
+the counter is no longer consumed by malformed or over-quota requests, so all 200 slots correspond to
+calls that actually reach a provider.
 
 **C2 — the accepted residual grew a consequence.** This plan explicitly accepted that "distinct-key doc
 spam is not fully stopped by rules". A later review found the same unconstrained `create` also lets a

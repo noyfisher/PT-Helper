@@ -85,8 +85,11 @@ Per-user quotas are good (20/min + 100/day + 1000/month) but **keyed on `uid`** 
 > user in roughly ten minutes. The check now runs last — only for a call actually reaching a provider —
 > and both counters are released together on every no-useful-response path.
 >
-> **Still open (deploy-time):** `BILLING_SHUTOFF_ENABLED` remains opt-in and defaults to DRY_RUN, and the
-> ceiling value itself needs sizing for the intended cohort.
+> **Ceiling sized (2026-08-31):** `AI_DAILY_BUDGET` stays at **200**, decided deliberately. Because the
+> counter is now consumed only by calls that reach a provider, those 200 slots go further than the same
+> number would have before the ordering fix.
+>
+> **Still open (deploy-time):** `BILLING_SHUTOFF_ENABLED` remains opt-in and defaults to DRY_RUN.
 
 ### P1-3 — No Firebase App Check on any HTTP endpoint
 **All HTTP functions** · Severity **Medium-High** (enabler for P1-1/P1-2 at scale)
