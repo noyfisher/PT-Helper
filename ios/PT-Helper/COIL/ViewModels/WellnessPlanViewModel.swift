@@ -305,12 +305,7 @@ class WellnessPlanViewModel: ObservableObject {
         )
 
         let exercises = aiResponse.exercises.map { aiExercise in
-            let difficulty: RehabExercise.Difficulty
-            switch aiExercise.difficulty.lowercased() {
-            case "intermediate": difficulty = .intermediate
-            case "advanced": difficulty = .advanced
-            default: difficulty = .beginner
-            }
+            let difficulty = RehabExercise.Difficulty.parse(aiExercise.difficulty)
 
             return RehabExercise(
                 id: UUID(),

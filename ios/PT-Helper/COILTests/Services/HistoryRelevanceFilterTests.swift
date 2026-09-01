@@ -110,8 +110,12 @@ final class HistoryRelevanceFilterTests: XCTestCase {
 
         let classified = HistoryRelevanceFilter.classify(surgeries: [surgery], assessedRegions: regions)
 
-        // Old surgery, no chain match → background, but surgical stays possiblyRelevant >5yr
-        XCTAssertTrue(classified[0].relevance <= .possiblyRelevant)
+        // A `<=` bound here pinned nothing: it passed for background AND for
+        // possiblyRelevant, so it could not distinguish the intended classification
+        // from the bug where the surgical >5yr bump was applied even with no
+        // anatomical or kinetic-chain match. A wrist surgery has no bearing on a knee
+        // assessment and must not enter the AI prompt as possibly relevant.
+        XCTAssertEqual(classified[0].relevance, .backgroundOnly)
     }
 
     // MARK: - Injury Classification
@@ -165,12 +169,11 @@ final class HistoryRelevanceFilterTests: XCTestCase {
 
         let classified = HistoryRelevanceFilter.classify(injuries: [injury], assessedRegions: regions)
 
-        // calf_shin is between ankle_foot and knee in chain
-        // ankle_foot → calf_shin → knee (not directly connected)
-        // So this may be background. Let's verify the chain.
-        // Actually ankle_foot connects to calf_shin, calf_shin connects to knee.
-        // ankle_foot does NOT directly connect to knee.
-        XCTAssertTrue(classified[0].relevance <= .possiblyRelevant)
+        // The kinetic-chain map is DIRECT connections only: ankle_foot connects to
+        // calf_shin and calf_shin connects to knee, but ankle_foot and knee are not
+        // directly connected, so this is not a chain match. `classifyInjury` returns
+        // background outright when there is no direct match.
+        XCTAssertEqual(classified[0].relevance, .backgroundOnly)
     }
 
     func testInjury_oldNoMatch_isBackground() {

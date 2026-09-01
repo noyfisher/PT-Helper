@@ -451,8 +451,11 @@ final class KnowledgeGraphServiceTests: XCTestCase {
             knowledgeGraph: service
         )
 
-        // Filter to only contraindication warnings (graph also adds .info red flag notes)
-        let contraindicationWarnings = warnings.filter { $0.severity == .caution || $0.severity == .urgent }
+        // Filter to contraindication warnings. KnowledgeGraphValidator emits these at
+        // `.serious` (Tier 1) — filtering on .caution/.urgent excluded the exact
+        // severity this test exists to check, so it passed no matter what production
+        // did. Anything at or above .serious counts.
+        let contraindicationWarnings = warnings.filter { $0.severity >= .serious }
         XCTAssertTrue(contraindicationWarnings.isEmpty, "Should not produce contraindication warnings for verified exercises")
     }
 

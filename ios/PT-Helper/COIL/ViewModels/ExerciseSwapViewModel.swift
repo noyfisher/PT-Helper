@@ -311,13 +311,7 @@ class ExerciseSwapViewModel: ObservableObject {
         )
 
         return aiResponse.substitutes.map { ai in
-            let difficulty: RehabExercise.Difficulty = {
-                switch ai.difficulty.lowercased() {
-                case "intermediate": return .intermediate
-                case "advanced": return .advanced
-                default: return .beginner
-                }
-            }()
+            let difficulty = RehabExercise.Difficulty.parse(ai.difficulty)
 
             let exercise = RehabExercise(
                 id: UUID(),

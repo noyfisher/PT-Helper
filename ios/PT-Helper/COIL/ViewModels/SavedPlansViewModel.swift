@@ -154,13 +154,7 @@ class SavedPlansViewModel: ObservableObject {
                 guard let eidStr = e["id"] as? String,
                       let eid = UUID(uuidString: eidStr),
                       let name = e["name"] as? String else { return nil }
-                let diffStr = e["difficulty"] as? String ?? "beginner"
-                let difficulty: RehabExercise.Difficulty
-                switch diffStr {
-                case "intermediate": difficulty = .intermediate
-                case "advanced": difficulty = .advanced
-                default: difficulty = .beginner
-                }
+                let difficulty = RehabExercise.Difficulty.parse(e["difficulty"] as? String)
                 return RehabExercise(
                     id: eid,
                     name: name,

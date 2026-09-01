@@ -181,6 +181,10 @@ final class ValidationRegressionRunner: XCTestCase {
         // Build mock service seeded with the golden response.
         let mock = MockClaudeAPIService()
         let goldenText = try goldenAsText(for: testCase)
+
+        if let expectedFallback = testCase.expectedOutcomes.expectedShadowFallbackUsed {
+            assertShadowFallback(expectedFallback, rawResponse: goldenText, caseId: caseId)
+        }
         if let verify = testCase.goldenVerifyResponse {
             // Two-call pipeline: queue analysis + verify responses in order.
             let verifyText = try encodeFixture(verify)
@@ -308,6 +312,36 @@ final class ValidationRegressionRunner: XCTestCase {
                 "[\(caseId)] expected noSelfManage red-flag alert, got: \(alertText)"
             )
         }
+    }
+
+    /// Assert `expectedShadowFallbackUsed`, which was decoded from `cases.json` and
+    /// then never checked — leaving case `04-malformed-with-preamble` declaring an
+    /// expectation nothing enforced.
+    ///
+    /// `ShadowModeJSONParser.parse` returns the decoded value whether or not the
+    /// permissive path saved it, so there is no return-value signal to assert on.
+    /// Rather than widen the production API for a test, this reconstructs the same
+    /// condition from the same input: the fallback is used exactly when a strict
+    /// decode fails but brace-extraction then succeeds.
+    private func assertShadowFallback(_ expected: Bool, rawResponse: String, caseId: String) {
+        let decoder = JSONDecoder()
+        let strictSucceeded = (try? decoder.decode(AIAnalysisResponseFixture.self,
+                                                   from: Data(rawResponse.utf8))) != nil
+
+        var permissiveSucceeded = false
+        if let start = rawResponse.firstIndex(of: "{"),
+           let end = rawResponse.lastIndex(of: "}"),
+           start <= end {
+            let extracted = String(rawResponse[start...end])
+            permissiveSucceeded = (try? decoder.decode(AIAnalysisResponseFixture.self,
+                                                       from: Data(extracted.utf8))) != nil
+        }
+
+        let fallbackUsed = !strictSucceeded && permissiveSucceeded
+        XCTAssertEqual(
+            fallbackUsed, expected,
+            "[\(caseId)] expectedShadowFallbackUsed=\(expected) but strict=\(strictSucceeded), permissive=\(permissiveSucceeded)"
+        )
     }
 
     // MARK: - Fixture → object adapters

@@ -82,6 +82,21 @@ struct RehabExercise: Codable, Identifiable {
 
     enum Difficulty: String, Codable, CaseIterable {
         case beginner, intermediate, advanced
+
+        /// Parse a difficulty from AI output or a Firestore document.
+        ///
+        /// This mapping was duplicated across four call sites, and they had already
+        /// drifted: the Firestore parse path matched on the raw string without
+        /// lowercasing, so a stored "Intermediate" silently decoded as `.beginner`.
+        /// Unknown values intentionally fall back to `.beginner` — the safest
+        /// prescription when the model returns something unrecognised.
+        static func parse(_ raw: String?) -> Difficulty {
+            switch raw?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "intermediate": return .intermediate
+            case "advanced": return .advanced
+            default: return .beginner
+            }
+        }
     }
 
     init(id: UUID, name: String, targetArea: String, description: String, sets: Int, reps: String, restSeconds: Int, difficulty: Difficulty, demonstrationIcon: String, tips: [String], contraindications: [String], startPosition: String? = nil, movement: String? = nil, endPosition: String? = nil, exerciseCategory: String? = nil, imageFileName: String? = nil, catalogSubstitution: Bool? = nil, notes: String? = nil, originalAIName: String? = nil) {

@@ -154,20 +154,29 @@ final class InjuryAnalyzerPromptTests: XCTestCase {
         XCTAssertEqual(exercises[0]["difficulty"] as? String, "beginner")
     }
 
-    func testRehabPlanParsing_DifficultyMapping() {
-        // Test that difficulty string mapping works correctly
-        let difficulties = ["beginner", "intermediate", "advanced", "unknown"]
-        let expected: [RehabExercise.Difficulty] = [.beginner, .intermediate, .advanced, .beginner]
+    /// This previously declared its OWN copy of the switch inside the test and
+    /// asserted against that copy, so it passed regardless of what production did —
+    /// and production had four separate copies of the mapping, one of which had
+    /// already drifted (the Firestore path matched without lowercasing, decoding a
+    /// stored "Intermediate" as .beginner). Now there is one parser and this
+    /// exercises it.
+    func testDifficultyParse_mapsKnownValues() {
+        XCTAssertEqual(RehabExercise.Difficulty.parse("beginner"), .beginner)
+        XCTAssertEqual(RehabExercise.Difficulty.parse("intermediate"), .intermediate)
+        XCTAssertEqual(RehabExercise.Difficulty.parse("advanced"), .advanced)
+    }
 
-        for (input, expectedDifficulty) in zip(difficulties, expected) {
-            let mapped: RehabExercise.Difficulty
-            switch input.lowercased() {
-            case "intermediate": mapped = .intermediate
-            case "advanced": mapped = .advanced
-            default: mapped = .beginner
-            }
-            XCTAssertEqual(mapped, expectedDifficulty, "'\(input)' should map to \(expectedDifficulty)")
-        }
+    func testDifficultyParse_isCaseAndWhitespaceInsensitive() {
+        XCTAssertEqual(RehabExercise.Difficulty.parse("Intermediate"), .intermediate,
+                       "Firestore stores capitalised values; they must not silently decode as beginner")
+        XCTAssertEqual(RehabExercise.Difficulty.parse("  ADVANCED  "), .advanced)
+    }
+
+    func testDifficultyParse_unknownAndMissingFallBackToBeginner() {
+        XCTAssertEqual(RehabExercise.Difficulty.parse("expert"), .beginner)
+        XCTAssertEqual(RehabExercise.Difficulty.parse(""), .beginner)
+        XCTAssertEqual(RehabExercise.Difficulty.parse(nil), .beginner,
+                       "An unrecognised difficulty must fall back to the safest prescription")
     }
 
     func testAnalysisResultParsing_RedFlag() throws {
