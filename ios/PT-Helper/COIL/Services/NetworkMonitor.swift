@@ -22,6 +22,12 @@ class NetworkMonitor: ObservableObject {
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
                 guard let self = self else { return }
+                // `--simulate-offline` seeds isConnected = false, but NWPathMonitor's
+                // first update lands asynchronously and used to overwrite it — so the
+                // offline UI-test scenario silently ran online and the offline paths
+                // it exists to cover were never exercised. (Debug-only: the flag is
+                // #if DEBUG and reads false in release.)
+                guard !TestDataSeeder.shouldSimulateOffline else { return }
                 let wasConnected = self.isConnected
                 self.isConnected = path.status == .satisfied
 

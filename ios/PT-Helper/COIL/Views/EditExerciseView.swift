@@ -12,6 +12,10 @@ struct EditExerciseView: View {
     @State private var description: String = ""
     @State private var difficulty: RehabExercise.Difficulty = .beginner
 
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -94,7 +98,7 @@ struct EditExerciseView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
-                        exercise.name = name
+                        exercise.name = trimmedName
                         exercise.sets = sets
                         exercise.reps = reps
                         exercise.restSeconds = restSeconds
@@ -103,6 +107,12 @@ struct EditExerciseView: View {
                         dismiss()
                     }
                     .fontWeight(.semibold)
+                    // Exercise NAME is the key for image resolution, the
+                    // contraindication checker and the knowledge-graph lookup, so
+                    // saving an empty one silently detaches the exercise from every
+                    // one of those. Saving is blocked rather than silently
+                    // substituted, so the user sees what they are fixing.
+                    .disabled(trimmedName.isEmpty)
                 }
             }
         }
