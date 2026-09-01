@@ -113,9 +113,13 @@ final class GuidedWorkoutUITests: UITestBase {
         XCTAssertTrue(staticText("End Workout?").waitForExistence(timeout: 3),
                       "End workout confirmation should appear")
 
-        // Verify both save and discard options exist (current copy: the destructive
-        // role sits on "Discard", the safe action reads "Save & Finish").
-        XCTAssertTrue(button("Save & Finish").exists, "Save & Finish button should exist")
+        // Verify both options exist. The destructive role sits on "Discard"; the
+        // safe action reads "Finish & Review" — renamed from "Save & Finish"
+        // because it does not save. Persisting happens on the summary screen,
+        // which collects the pain level and notes the session needs, so the old
+        // label promised something the button could not do and a user who
+        // navigated back from the summary lost the workout.
+        XCTAssertTrue(button("Finish & Review").exists, "Finish & Review button should exist")
         XCTAssertTrue(button("Discard Without Saving").exists, "Discard Without Saving button should exist")
 
         captureScreenshot(name: "Workout-EndConfirmation")
