@@ -88,6 +88,8 @@ class InjuryAnalysisViewModel: ObservableObject {
         analysisError = nil
         showAnalyzingScreen = false
         currentStage = nil
+        redFlagAlerts = []
+        validationWarnings = []
     }
 
     /// Reset all analysis state (used when navigating back to body map).
@@ -99,6 +101,13 @@ class InjuryAnalysisViewModel: ObservableObject {
         analysisResult = nil
         showAnalyzingScreen = false
         currentStage = nil
+        // AnalyzingView routes to the emergency takeover when it finds red-flag
+        // alerts with no in-flight analysis and no result. Leaving these set meant a
+        // flag from a PREVIOUS assessment could hijack the next one the moment its
+        // analyzing screen appeared. The wellness twin already clears its
+        // equivalents — this is the same contract.
+        redFlagAlerts = []
+        validationWarnings = []
     }
 
     private func startAnalysis() {

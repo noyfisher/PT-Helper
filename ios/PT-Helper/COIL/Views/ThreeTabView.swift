@@ -83,8 +83,11 @@ struct ThreeTabView: View {
         .environmentObject(networkMonitor)
         .environmentObject(recoveryInsightsViewModel)
         .environmentObject(analysisStore)
-        .onChange(of: tabSelection.selectedTab) { oldTab, newTab in
-            if oldTab == newTab { tabSelection.popToRootCurrentTab() }
+        .onChange(of: tabSelection.selectedTab) { _, newTab in
+            // No re-tap branch here: onChange only fires when the value actually
+            // changes, so `oldTab == newTab` was unreachable and read as though
+            // pop-to-root-on-retap lived here. It is implemented in the tab bar's
+            // own tap handler, which can see a tap on the already-selected tab.
             let tabNames = ["Home", "My Plan", "Progress", "Profile"]
             let name = newTab < tabNames.count ? tabNames[newTab] : "Unknown"
             SessionLogger.shared.logNavigation(.tabSwitched, screen: name, metadata: ["tab": "\(newTab)"])

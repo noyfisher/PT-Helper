@@ -24,8 +24,6 @@ struct WellnessDetailView: View {
     @State private var additionalNotes: String = ""
 
     @State private var destination: WellnessDestination?
-    @Environment(\.dismiss) private var dismiss
-
     var body: some View {
         ZStack {
             AppColors.bgGradient.ignoresSafeArea()

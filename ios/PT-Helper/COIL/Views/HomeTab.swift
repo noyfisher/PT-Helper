@@ -305,9 +305,9 @@ private struct ExerciseProgramRow: View {
 
             Spacer()
 
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(AppColors.mutedText)
+            // No disclosure chevron: this row has no tap target. A chevron is a
+            // promise of navigation, and tapping did nothing — the exercise detail
+            // is reached from the plan, not from here.
         }
         .padding(AppSpacing.md)
         .background(AppColors.cardBackground)

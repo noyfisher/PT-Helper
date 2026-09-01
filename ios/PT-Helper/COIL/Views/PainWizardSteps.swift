@@ -57,9 +57,7 @@ extension PainDetailView {
                     isSelected: painDurations.contains(duration),
                     action: {
                         painDurations = [duration]
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                            handleContinue()
-                        }
+                        scheduleAutoAdvance()
                     }
                 )
             }

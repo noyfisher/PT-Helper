@@ -250,6 +250,23 @@ struct PainDetailView: View {
         currentStep += 1
     }
 
+    /// Advance after a short delay, but only if the wizard is still on the step the
+    /// tap came from.
+    ///
+    /// The duration card auto-advances on a 0.25s delay, and `handleContinue`
+    /// increments unconditionally, so two actions inside that window — double-tapping
+    /// a card, or tapping a card and then the Continue button that enables
+    /// immediately — each advanced a step and the next question was skipped
+    /// entirely. Capturing the step here keeps `currentStep` private to this view
+    /// while making the stale advance a no-op.
+    func scheduleAutoAdvance(after delay: TimeInterval = 0.25) {
+        let stepAtTap = currentStep
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            guard currentStep == stepAtTap else { return }
+            handleContinue()
+        }
+    }
+
     // MARK: - Form State Management
 
     private func buildAssessment() -> PainAssessment? {

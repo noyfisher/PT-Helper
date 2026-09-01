@@ -12,6 +12,9 @@ struct BodyMap3DView: View {
     // MARK: - Navigation State
 
     @State private var navigateToPainDetail = false
+    /// Bumped by Retry to give the RealityView a new identity, which is the only
+    /// way to re-run its make closure.
+    @State private var modelReloadToken = 0
     @State private var showRegionList = false
     @State private var showDisclaimer = false
     /// MHMDA health-data consent gate (shown before the disclaimer on first use).
@@ -361,6 +364,9 @@ struct BodyMap3DView: View {
             .gesture(rotateAndPanGesture)
             .simultaneousGesture(zoomGesture)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // New identity on retry → RealityView rebuilds and its make closure
+            // runs again. Without this the Retry button was inert.
+            .id(modelReloadToken)
 
             // Reset button (bottom-right)
             VStack {
@@ -1322,7 +1328,11 @@ struct BodyMap3DView: View {
     private func retryModelLoad() {
         loadError = nil
         isLoading = true
-        // RealityView will re-execute its content closure on next layout pass
+        // RealityView's make closure runs ONCE per view identity — the old comment
+        // assumed it would re-execute on the next layout pass, so Retry cleared the
+        // error, showed the spinner, and then nothing ever re-attempted the load.
+        // Changing the identity is what forces a rebuild.
+        modelReloadToken += 1
     }
 
     // MARK: - Zone Region Strip
