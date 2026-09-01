@@ -539,10 +539,19 @@ Set overall_pass to true only if ALL checks pass AND pose_score >= 2. List faile
       failures?: string[];
     };
 
-    return {
-      passed: result.overall_pass !== false,
-      failures: result.failures || [],
-    };
+    // Fail CLOSED: require an explicit `true`. `overall_pass !== false` treated a
+    // missing, renamed or stringified field as a pass, so a QA response the model
+    // shaped slightly differently published an unvetted image to shared Storage and
+    // into the mapping every user reads — the opposite of this file's stated
+    // fail-closed design, and reachable without the model ever saying "pass".
+    if (result.overall_pass !== true) {
+      return {
+        passed: false,
+        failures: result.failures?.length ? result.failures : ["qa_no_explicit_pass"],
+      };
+    }
+
+    return { passed: true, failures: result.failures || [] };
   } catch (err) {
     console.error("Gemini QA error:", err);
     // Same fix as the HTTP-error branch — don't silently ship on thrown exceptions.
@@ -704,6 +713,33 @@ async function acquireGenerationLock(normalizedKey: string): Promise<boolean> {
   });
 }
 
+/**
+ * Release a lock taken by `acquireGenerationLock` without marking the exercise
+ * generated.
+ *
+ * Only the full-success path used to clear the lock, so every failure after it
+ * was taken — missing API key, generation failure, QA unavailable, upload
+ * failure — left the document in `status: "generating"` for the whole 10-minute
+ * TTL. Several of those paths return `retryable: true`, so the client was
+ * explicitly told to try again into a wall it could not pass, and each attempt
+ * still consumed the caller's daily image quota.
+ */
+async function releaseGenerationLock(normalizedKey: string): Promise<void> {
+  try {
+    await getDb().collection("missingExerciseImages").doc(normalizedKey).set(
+      {
+        status: "pending",
+        generatingStartedAt: admin.firestore.FieldValue.delete(),
+      },
+      { merge: true },
+    );
+  } catch (err) {
+    // Best-effort: the TTL is the backstop, and a failed release must never
+    // replace the real error the caller is about to return.
+    console.error("Failed to release generation lock:", err);
+  }
+}
+
 async function markGenerated(normalizedKey: string): Promise<void> {
   await getDb().collection("missingExerciseImages").doc(normalizedKey).set(
     { status: "generated", generatedAt: admin.firestore.FieldValue.serverTimestamp() },
@@ -840,6 +876,7 @@ export async function handleGenerateExerciseImage(
   const geminiApiKey = process.env.GEMINI_API_KEY;
 
   if (!bflApiKey) {
+    await releaseGenerationLock(normalizedKey);
     return { status: "generation_failed", message: "BFL_API_KEY not configured", retryable: false };
   }
 
@@ -857,6 +894,7 @@ export async function handleGenerateExerciseImage(
   let imageBuffer = await callBflApi(prompt, bflApiKey);
 
   if (!imageBuffer) {
+    await releaseGenerationLock(normalizedKey);
     return { status: "generation_failed", message: "Image generation failed", retryable: true };
   }
 
@@ -866,6 +904,7 @@ export async function handleGenerateExerciseImage(
   // qaSkipped:true.
   if (!geminiApiKey) {
     await bumpQaUnavailableCounter(normalizedKey, "gemini_key_unconfigured");
+    await releaseGenerationLock(normalizedKey);
     return {
       status: "qa_failed",
       message: "Image quality check is unavailable. Image was not published.",
@@ -889,6 +928,7 @@ export async function handleGenerateExerciseImage(
     // seed wouldn't help — QA would still be unavailable.
     if (qa.unavailable) {
       await bumpQaUnavailableCounter(normalizedKey, qa.failures.join(", "));
+      await releaseGenerationLock(normalizedKey);
       return {
         status: "qa_failed",
         message: "Image quality check is temporarily unavailable. Please try again in a minute.",
@@ -902,6 +942,7 @@ export async function handleGenerateExerciseImage(
       imageBuffer = await callBflApi(prompt, bflApiKey, 42);
 
       if (!imageBuffer) {
+        await releaseGenerationLock(normalizedKey);
         return { status: "generation_failed", message: "Retry generation failed", retryable: true };
       }
 
@@ -915,6 +956,7 @@ export async function handleGenerateExerciseImage(
 
       if (retryQa.unavailable) {
         await bumpQaUnavailableCounter(normalizedKey, retryQa.failures.join(", "));
+        await releaseGenerationLock(normalizedKey);
         return {
           status: "qa_failed",
           message: "Image quality check is temporarily unavailable. Please try again in a minute.",
@@ -923,6 +965,7 @@ export async function handleGenerateExerciseImage(
       }
 
       if (!retryQa.passed) {
+        await releaseGenerationLock(normalizedKey);
         return {
           status: "qa_failed",
           message: `Image quality check failed: ${retryQa.failures.join(", ")}`,
@@ -951,6 +994,7 @@ export async function handleGenerateExerciseImage(
     };
   } catch (err) {
     console.error("Upload/mapping update failed:", err);
+    await releaseGenerationLock(normalizedKey);
     return { status: "generation_failed", message: "Failed to upload image", retryable: true };
   }
 }

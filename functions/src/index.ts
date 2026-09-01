@@ -541,7 +541,20 @@ export const claudeProxy = functions
     // -----------------------------------------------------------------------
     // 2. Rate limit
     // -----------------------------------------------------------------------
-    if (await isRateLimited(uid)) {
+    // Wrapped: isRateLimited runs a Firestore transaction, which throws on
+    // persistent contention or transient unavailability. Unwrapped, that escaped as
+    // an unhandled rejection and the caller got no response at all. The quota block
+    // below is wrapped for exactly this reason; this one was not. Fail OPEN on a
+    // limiter error — the global budget and per-user quota still bound the damage,
+    // and failing closed would turn a Firestore blip into a total outage.
+    let rateLimited: boolean;
+    try {
+      rateLimited = await isRateLimited(uid);
+    } catch (err) {
+      logError(ctx, err, { stage: "rate_limit_check" });
+      rateLimited = false;
+    }
+    if (rateLimited) {
       res.status(429).json({ error: "Rate limit exceeded. Please wait and try again." });
       return;
     }
@@ -873,7 +886,20 @@ export const crossVerify = functions
     // -----------------------------------------------------------------------
     // 2. Rate limit (shares the same limiter as claudeProxy)
     // -----------------------------------------------------------------------
-    if (await isRateLimited(uid)) {
+    // Wrapped: isRateLimited runs a Firestore transaction, which throws on
+    // persistent contention or transient unavailability. Unwrapped, that escaped as
+    // an unhandled rejection and the caller got no response at all. The quota block
+    // below is wrapped for exactly this reason; this one was not. Fail OPEN on a
+    // limiter error — the global budget and per-user quota still bound the damage,
+    // and failing closed would turn a Firestore blip into a total outage.
+    let rateLimited: boolean;
+    try {
+      rateLimited = await isRateLimited(uid);
+    } catch (err) {
+      logError(ctx, err, { stage: "rate_limit_check" });
+      rateLimited = false;
+    }
+    if (rateLimited) {
       res.status(429).json({ error: "Rate limit exceeded. Please wait and try again." });
       return;
     }
@@ -2004,7 +2030,20 @@ export const agentInsights = functions
     }
 
     // 2. Rate limit
-    if (await isRateLimited(uid)) {
+    // Wrapped: isRateLimited runs a Firestore transaction, which throws on
+    // persistent contention or transient unavailability. Unwrapped, that escaped as
+    // an unhandled rejection and the caller got no response at all. The quota block
+    // below is wrapped for exactly this reason; this one was not. Fail OPEN on a
+    // limiter error — the global budget and per-user quota still bound the damage,
+    // and failing closed would turn a Firestore blip into a total outage.
+    let rateLimited: boolean;
+    try {
+      rateLimited = await isRateLimited(uid);
+    } catch (err) {
+      logError(ctx, err, { stage: "rate_limit_check" });
+      rateLimited = false;
+    }
+    if (rateLimited) {
       res.status(429).json({ error: "Rate limit exceeded. Please wait and try again." });
       return;
     }
@@ -2261,7 +2300,20 @@ export const agentFormAnalysis = functions
     }
 
     // 2. Rate limit
-    if (await isRateLimited(uid)) {
+    // Wrapped: isRateLimited runs a Firestore transaction, which throws on
+    // persistent contention or transient unavailability. Unwrapped, that escaped as
+    // an unhandled rejection and the caller got no response at all. The quota block
+    // below is wrapped for exactly this reason; this one was not. Fail OPEN on a
+    // limiter error — the global budget and per-user quota still bound the damage,
+    // and failing closed would turn a Firestore blip into a total outage.
+    let rateLimited: boolean;
+    try {
+      rateLimited = await isRateLimited(uid);
+    } catch (err) {
+      logError(ctx, err, { stage: "rate_limit_check" });
+      rateLimited = false;
+    }
+    if (rateLimited) {
       res.status(429).json({ error: "Rate limit exceeded. Please wait and try again." });
       return;
     }

@@ -144,3 +144,57 @@ describe("locked-down collections", () => {
     await assertFails(setDoc(doc(aliceDb(), "config/exerciseImageAliases"), { aliases: { x: "y" } }));
   });
 });
+
+describe("missingExerciseImages — bounded writes", () => {
+  const valid = () => ({
+    exerciseName: "Wall Sits",
+    normalizedKey: "wall-sits",
+    matchType: "none",
+    exerciseCategory: "strength",
+    targetArea: "Knee",
+    source: "display",
+    count: 1,
+    lastSeen: Timestamp.now(),
+  });
+
+  it("accepts the payload the client actually sends", async () => {
+    await assertSucceeds(setDoc(doc(aliceDb(), "missingExerciseImages/wall-sits"), valid()));
+  });
+
+  /// The security-relevant case: the same document is the generation lock for
+  /// `generateExerciseImage`, and those fields are Admin-SDK only. A client that
+  /// could forge them would block generation for that exercise for the lock's TTL.
+  it("rejects a client forging the generation-lock fields", async () => {
+    await assertFails(
+      setDoc(doc(aliceDb(), "missingExerciseImages/locked-1"), {
+        ...valid(),
+        status: "generating",
+        generatingStartedAt: Timestamp.now(),
+      })
+    );
+  });
+
+  it("rejects unknown fields and oversized strings", async () => {
+    await assertFails(
+      setDoc(doc(aliceDb(), "missingExerciseImages/junk-1"), { ...valid(), attackerField: "x" })
+    );
+    await assertFails(
+      setDoc(doc(aliceDb(), "missingExerciseImages/junk-2"), { ...valid(), exerciseName: "x".repeat(5000) })
+    );
+  });
+
+  it("allows the counter to step by exactly one, never to jump", async () => {
+    const ref = doc(aliceDb(), "missingExerciseImages/step-1");
+    await assertSucceeds(setDoc(ref, valid()));
+    await assertSucceeds(setDoc(ref, { ...valid(), count: 2 }));
+    await assertFails(setDoc(ref, { ...valid(), count: 99 }));
+  });
+
+  it("stays readable to signed-in clients and closed to anonymous ones", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "missingExerciseImages/readable"), valid());
+    });
+    await assertSucceeds(getDoc(doc(aliceDb(), "missingExerciseImages/readable")));
+    await assertFails(getDoc(doc(anonDb(), "missingExerciseImages/readable")));
+  });
+});

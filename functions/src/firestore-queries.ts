@@ -58,21 +58,32 @@ export async function fetchRecoveryInsightsData(uid: string): Promise<RecoveryIn
   const sessionLines: string[] = [];
   for (const doc of sessionsSnap.docs) {
     const s = doc.data();
-    const date = (s.date as admin.firestore.Timestamp).toDate();
+    // Every field here is client-written and `users/{uid}/workoutSessions` has no
+    // schema in the rules, so nothing guarantees a number is a number. Calling
+    // .toFixed() on a string threw and took the whole recovery-insights fetch with
+    // it — one malformed document disabled the feature for the entire 14-day
+    // window. Coerce defensively and skip what cannot be read.
+    const rawDate = s.date;
+    const date = rawDate && typeof (rawDate as admin.firestore.Timestamp).toDate === "function"
+      ? (rawDate as admin.firestore.Timestamp).toDate()
+      : null;
+    if (!date) continue;
     const dateStr = formatDate(date);
-    const painLevel = s.painLevel ?? 0;
-    const exerciseCount = (s.exercisesPerformed as string[] | undefined)?.length ?? 0;
-    const duration = Math.round((s.duration ?? 0) / 60);
+    const painLevel = typeof s.painLevel === "number" && Number.isFinite(s.painLevel) ? s.painLevel : 0;
+    const exerciseCount = Array.isArray(s.exercisesPerformed) ? s.exercisesPerformed.length : 0;
+    const rawDuration = typeof s.duration === "number" && Number.isFinite(s.duration) ? s.duration : 0;
+    const duration = Math.round(rawDuration / 60);
 
     let line = `- ${dateStr}: pain ${painLevel.toFixed(1)}/10, ${exerciseCount} exercises, ${duration} min`;
 
     // Per-region pain
-    const regionPain = s.regionPainLevels as Record<string, number> | undefined;
+    const regionPain = s.regionPainLevels as Record<string, unknown> | undefined;
     if (regionPain && Object.keys(regionPain).length > 0) {
       const regionStr = Object.entries(regionPain)
-        .map(([region, level]) => `${region}: ${level.toFixed(1)}`)
+        .filter(([, level]) => typeof level === "number" && Number.isFinite(level))
+        .map(([region, level]) => `${region}: ${(level as number).toFixed(1)}`)
         .join(", ");
-      line += ` [regions: ${regionStr}]`;
+      if (regionStr) line += ` [regions: ${regionStr}]`;
     }
 
     // Linked plan name
