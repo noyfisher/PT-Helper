@@ -61,11 +61,12 @@ final class ResponseValidationPipelineTests: XCTestCase {
         name: String = "Wall Sits",
         sets: Int = 3,
         restSeconds: Int = 45,
+        reps: String = "10",
         difficulty: RehabExercise.Difficulty = .beginner
     ) -> RehabExercise {
         RehabExercise(
             id: UUID(), name: name, targetArea: "Knee",
-            description: "Test", sets: sets, reps: "10",
+            description: "Test", sets: sets, reps: reps,
             restSeconds: restSeconds, difficulty: difficulty,
             demonstrationIcon: "figure.cooldown",
             tips: [], contraindications: []
@@ -409,39 +410,60 @@ final class ResponseValidationPipelineTests: XCTestCase {
         XCTAssertTrue(warnings.count >= 2)
     }
 
-    func testValidateParameters_normalRange() {
+    // These previously asserted only that a MESSAGE was produced, which is why the
+    // defect survived: the pipeline reported "has unusual sets count: 15" as an
+    // `.info` badge and then shipped the 15 sets to the user unchanged. Each test
+    // now asserts the corrected VALUE as well as the report.
+
+    func testValidateParameters_normalRange_leavesExercisesUntouched() {
         let exercises = [makeExercise(sets: 3, restSeconds: 45)]
-        let fixes = ExerciseContraindicationChecker.validateParameters(exercises)
+        let result = ExerciseContraindicationChecker.validateParameters(exercises)
 
-        XCTAssertTrue(fixes.isEmpty)
+        XCTAssertTrue(result.fixes.isEmpty)
+        XCTAssertEqual(result.exercises[0].sets, 3)
+        XCTAssertEqual(result.exercises[0].restSeconds, 45)
     }
 
-    func testValidateParameters_unusualSets() {
+    func testValidateParameters_setsAboveRange_areClampedNotJustReported() {
         let exercises = [makeExercise(name: "Bad Sets", sets: 15)]
-        let fixes = ExerciseContraindicationChecker.validateParameters(exercises)
+        let result = ExerciseContraindicationChecker.validateParameters(exercises)
 
-        XCTAssertTrue(fixes.contains(where: { $0.contains("unusual sets") }))
+        XCTAssertEqual(result.exercises[0].sets, 10, "15 sets must not reach the user")
+        XCTAssertTrue(result.fixes.contains(where: { $0.contains("Bad Sets") && $0.contains("10") }))
     }
 
-    func testValidateParameters_unusualRest() {
+    func testValidateParameters_restAboveRange_isClamped() {
         let exercises = [makeExercise(name: "Bad Rest", restSeconds: 400)]
-        let fixes = ExerciseContraindicationChecker.validateParameters(exercises)
+        let result = ExerciseContraindicationChecker.validateParameters(exercises)
 
-        XCTAssertTrue(fixes.contains(where: { $0.contains("unusual rest") }))
+        XCTAssertEqual(result.exercises[0].restSeconds, 300)
+        XCTAssertTrue(result.fixes.contains(where: { $0.contains("Bad Rest") }))
     }
 
-    func testValidateParameters_zeroSets() {
+    func testValidateParameters_zeroSets_isRaisedToTheMinimum() {
         let exercises = [makeExercise(name: "Zero Sets", sets: 0)]
-        let fixes = ExerciseContraindicationChecker.validateParameters(exercises)
+        let result = ExerciseContraindicationChecker.validateParameters(exercises)
 
-        XCTAssertFalse(fixes.isEmpty)
+        XCTAssertEqual(result.exercises[0].sets, 1, "A zero-set exercise is not performable")
+        XCTAssertFalse(result.fixes.isEmpty)
     }
 
-    func testValidateParameters_negativeRest() {
+    func testValidateParameters_negativeRest_isRaisedToZero() {
         let exercises = [makeExercise(name: "Neg Rest", restSeconds: -10)]
-        let fixes = ExerciseContraindicationChecker.validateParameters(exercises)
+        let result = ExerciseContraindicationChecker.validateParameters(exercises)
 
-        XCTAssertFalse(fixes.isEmpty)
+        XCTAssertEqual(result.exercises[0].restSeconds, 0)
+        XCTAssertFalse(result.fixes.isEmpty)
+    }
+
+    /// `reps` is a free-form spec string, so it stays advisory — rewriting it could
+    /// change the meaning of a prescription rather than bound it.
+    func testValidateParameters_outOfRangeReps_areReportedButNotRewritten() {
+        let exercises = [makeExercise(name: "Many Reps", reps: "60")]
+        let result = ExerciseContraindicationChecker.validateParameters(exercises)
+
+        XCTAssertEqual(result.exercises[0].reps, "60")
+        XCTAssertTrue(result.fixes.contains(where: { $0.contains("Many Reps") }))
     }
 
     // MARK: - AnatomicalRelevanceChecker Tests

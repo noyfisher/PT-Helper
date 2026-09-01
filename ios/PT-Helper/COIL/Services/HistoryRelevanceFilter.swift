@@ -105,7 +105,20 @@ enum HistoryRelevanceFilter {
         } else if yearsAgo <= 5 {
             return .possiblyRelevant
         } else {
-            // >5 years: surgical history stays possiblyRelevant, injuries fade to background
+            // >5 years: surgical history normally stays possiblyRelevant while injuries
+            // fade to background — surgeries keep mattering longer.
+            //
+            // That bump must not apply when the caller has already established there is
+            // NO anatomical and NO kinetic-chain match (baseline .backgroundOnly).
+            // `classifySurgery` passes exactly that, but the baseline was only consulted
+            // inside the unknown-year branch above — and `Surgery.year` is a
+            // non-optional Int, so for surgeries that branch is unreachable and the
+            // parameter was dead. The effect: a decades-old surgery unrelated to
+            // anything being assessed still ranked possiblyRelevant and was fed to the
+            // AI prompt as though it might bear on the current complaint.
+            if baseline == .backgroundOnly {
+                return .backgroundOnly
+            }
             return isSurgical ? .possiblyRelevant : .backgroundOnly
         }
     }

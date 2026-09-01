@@ -599,6 +599,29 @@ enum ComorbidityInteractionMap {
 /// alias map and decide whether to expand it. Auth-safe: no-op if no
 /// authenticated user (cold start before sign-in).
 enum ComorbidityAliasMissTelemetry {
+
+    /// Doc ids already recorded in this process.
+    ///
+    /// `recordMiss` is reached from `ExerciseContraindicationChecker.validate`,
+    /// which the image-substitution step calls once per *candidate* — potentially
+    /// hundreds of catalog entries for a single exercise. Every candidate
+    /// re-canonicalized the same user conditions, so one unmapped condition
+    /// spawned a detached Firestore write per probe: a write flood on a hot loop,
+    /// and a counter measuring how many candidates happened to be tried rather
+    /// than how often the alias map actually missed.
+    ///
+    /// Deduping per process makes the metric the one that was intended — distinct
+    /// unmapped conditions seen — and collapses the flood to one write each.
+    private static var recorded = Set<String>()
+    private static let recordedLock = NSLock()
+
+    /// Returns true the first time this process sees `docId`.
+    private static func claim(_ docId: String) -> Bool {
+        recordedLock.lock()
+        defer { recordedLock.unlock() }
+        return recorded.insert(docId).inserted
+    }
+
     static func recordMiss(condition: String) {
         let slug = condition
             .lowercased()
@@ -612,6 +635,8 @@ enum ComorbidityAliasMissTelemetry {
             .joined()
             .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
         let docId = slug.isEmpty ? "_empty" : String(slug.prefix(100))
+
+        guard claim(docId) else { return }
 
         Task.detached {
             await _record(docId: docId, original: condition)
@@ -783,15 +808,41 @@ struct ExerciseContraindicationChecker {
     /// - duration in seconds → clamp 5–120 warning
     /// - unrecognized spec → silent telemetry, NOT a user-visible caution
     ///   (wellness plans commonly use "As needed"/"Daily"/"As tolerated").
-    static func validateParameters(_ exercises: [RehabExercise]) -> [String] {
-        var fixes: [String] = []
+    /// Safe therapeutic bands. Values outside these are corrected, not just noted.
+    static let setsRange = 1...10
+    static let restSecondsRange = 0...300
 
-        for exercise in exercises {
-            if exercise.sets < 1 || exercise.sets > 10 {
-                fixes.append("Exercise \"\(exercise.name)\" has unusual sets count: \(exercise.sets)")
+    /// Validates exercise parameters and CLAMPS the numeric ones into their safe
+    /// band, returning the corrected exercises alongside a description of every
+    /// correction applied.
+    ///
+    /// This previously only appended advisory strings and returned nothing: the
+    /// pipeline reported "has unusual sets count: 15" as an `.info` badge while
+    /// shipping the 15 sets to the user unchanged. A range check that names the
+    /// problem and then prescribes it anyway is not a safety control. The server
+    /// schema is no backstop either — it bounds only nonsense (see
+    /// response-schemas.ts), because a rejection there loses the whole plan.
+    ///
+    /// `reps` is deliberately NOT clamped: it is a free-form spec string
+    /// ("8-12", "30 seconds", "As tolerated"), and rewriting it risks changing
+    /// the meaning of a prescription rather than bounding it. Out-of-band rep
+    /// specs stay advisory.
+    static func validateParameters(_ exercises: [RehabExercise]) -> (exercises: [RehabExercise], fixes: [String]) {
+        var fixes: [String] = []
+        var corrected = exercises
+
+        for index in corrected.indices {
+            let exercise = corrected[index]
+
+            if !setsRange.contains(exercise.sets) {
+                let clamped = min(max(exercise.sets, setsRange.lowerBound), setsRange.upperBound)
+                fixes.append("Adjusted \"\(exercise.name)\" from \(exercise.sets) sets to \(clamped) — outside the safe range.")
+                corrected[index].sets = clamped
             }
-            if exercise.restSeconds < 0 || exercise.restSeconds > 300 {
-                fixes.append("Exercise \"\(exercise.name)\" has unusual rest period: \(exercise.restSeconds)s")
+            if !restSecondsRange.contains(exercise.restSeconds) {
+                let clamped = min(max(exercise.restSeconds, restSecondsRange.lowerBound), restSecondsRange.upperBound)
+                fixes.append("Adjusted rest for \"\(exercise.name)\" from \(exercise.restSeconds)s to \(clamped)s — outside the safe range.")
+                corrected[index].restSeconds = clamped
             }
 
             switch RepSpecParser.parse(exercise.reps) {
@@ -816,7 +867,7 @@ struct ExerciseContraindicationChecker {
             }
         }
 
-        return fixes
+        return (corrected, fixes)
     }
 }
 
@@ -1163,9 +1214,23 @@ struct ImageAvailabilityValidator {
                 rewrittenExercise.name = substitute.name
                 rewrittenExercise.imageFileName = substitute.key
                 rewritten.append(rewrittenExercise)
+                // The warning must describe what ACTUALLY changed. It previously read
+                // "Showing illustration for similar exercise", implying the swap was
+                // display-only — but the exercise NAME is rewritten too while the
+                // description, tips, phase instructions and sets/reps/rest all remain
+                // the originally prescribed ones. A user reading a renamed card was
+                // given no signal that the instructions belong to a different movement.
+                //
+                // DESIGN GAP (not fixable here): the catalog behind this substitution
+                // is the image mapping — key, name, category, target-area tokens — so
+                // it carries no instructional content to swap in alongside the name.
+                // Closing the mismatch properly means either sourcing instructions for
+                // the substitute, or not renaming and treating this as illustration-only.
+                // Both are product decisions beyond a copy fix; this at least stops the
+                // message asserting something untrue.
                 warnings.append(ValidationWarning(
                     severity: .info,
-                    message: "Showing illustration for similar exercise: \(substitute.name) (instead of \(original.name))."
+                    message: "\"\(original.name)\" wasn't in our exercise library, so it's shown as \"\(substitute.name)\". Follow the written steps on the card — they describe the exercise your plan prescribed."
                 ))
                 log.info("Image substitution: '\(original.name)' → '\(substitute.name)' (key: \(substitute.key))")
 
@@ -1632,8 +1697,9 @@ struct ResponseValidationPipeline {
         let contraindicated = graphResult.verification.contraindicatedExercises.count
         logger.debug("[Rehab 3/9] Knowledge graph: \(verified) verified, \(contraindicated) contraindicated, \(unverified) unverified")
 
-        // 4/9. Parameter range validation
-        let paramFixes = ExerciseContraindicationChecker.validateParameters(workingPlan.exercises)
+        // 4/9. Parameter range validation — corrections are APPLIED, not just noted.
+        let (boundedExercises, paramFixes) = ExerciseContraindicationChecker.validateParameters(workingPlan.exercises)
+        workingPlan.exercises = boundedExercises
         for fix in paramFixes {
             warnings.append(ValidationWarning(severity: .info, message: fix))
         }

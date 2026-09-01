@@ -166,6 +166,11 @@ class RehabPlanViewModel: ObservableObject {
 
         isGenerating = true
         generationError = nil
+        // Verification state is keyed by exercise NAME and is only ever written for
+        // exercises present in the CURRENT plan, so anything left from a previous
+        // plan survives and is rendered against the new one. Clear it up front.
+        exerciseVerifications = [:]
+        verificationComplete = false
 
         AppLogger.rehab.info("Starting rehab plan generation for \(conditions.count) condition(s): \(conditions.joined(separator: ", "))")
         // Session logs upload to Firebase; per the privacy policy they must not

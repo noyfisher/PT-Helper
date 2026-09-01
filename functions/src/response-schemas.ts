@@ -59,9 +59,14 @@ const exerciseSchema = z.object({
   name: z.string().min(1),
   targetArea: z.string().min(1),
   description: z.string().min(1),
-  sets: z.number().int().min(0),
+  // Upper bounds catch NONSENSE only (a model emitting 50 sets or an hour of
+  // rest), not clinical judgement. They are deliberately far outside the
+  // therapeutic band the client enforces: a schema failure here 502s and loses
+  // the entire plan, so rejecting merely-unusual values would turn a correctable
+  // parameter into a failed generation.
+  sets: z.number().int().min(0).max(20),
   reps: z.string().min(1),
-  restSeconds: z.number().int().min(0),
+  restSeconds: z.number().int().min(0).max(900),
   difficulty: lowercaseEnum(["beginner", "intermediate", "advanced"]),
   demonstrationIcon: z.string(),
   tips: z.array(z.string()),
