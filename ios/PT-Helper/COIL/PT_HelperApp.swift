@@ -43,11 +43,28 @@ struct PainPointApp: App {
                         // upload trigger. The background task keeps iOS from
                         // suspending us before the upload finishes.
                         SessionLogger.shared.endSession()
-                        let taskId = UIApplication.shared.beginBackgroundTask(withName: "SessionLogUpload")
+                        // The expiration handler is required, not optional: without
+                        // one, a background task that outlives its window is
+                        // terminated by the watchdog and the app is killed. The
+                        // upload does a Storage putData (default retry window ~600s)
+                        // plus a Firestore write, so an offline or stalled
+                        // background launch could sit well past the ~30s iOS grants.
+                        var taskId: UIBackgroundTaskIdentifier = .invalid
+                        taskId = UIApplication.shared.beginBackgroundTask(withName: "SessionLogUpload") {
+                            // Last word before the system reclaims us — end the task
+                            // ourselves so it is a clean stop rather than a kill. The
+                            // log is already persisted to disk, so crash recovery
+                            // picks it up on the next launch.
+                            if taskId != .invalid {
+                                UIApplication.shared.endBackgroundTask(taskId)
+                                taskId = .invalid
+                            }
+                        }
                         Task {
                             await SessionLogger.shared.uploadToFirestore(force: true)
                             if taskId != .invalid {
                                 UIApplication.shared.endBackgroundTask(taskId)
+                                taskId = .invalid
                             }
                         }
                     default:

@@ -96,7 +96,9 @@ struct RootView: View {
                     // FCM token is cleared at the sign-out ACTION while still
                     // authenticated (see SettingsView) — by the time this listener
                     // fires the user is nil and the Firestore write would be denied.
-                    NotificationService.shared.cancelAllReminders()
+                    // Sign-out: also drop the cached plan names so they cannot leak
+                    // into the next account's reminders.
+                    NotificationService.shared.cancelAllRemindersAndForgetPlans()
                     OnboardingViewModel.clearDraft()
                     profileCompleted = false
                     // Reset the skip flag so a different account on this device

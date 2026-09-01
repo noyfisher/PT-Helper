@@ -447,20 +447,25 @@ class RehabPlanViewModel: ObservableObject {
         - Activity Level: \(profile.activityLevel)
         """
 
+        // Free-text profile fields are user-authored (the medical-history step
+        // accepts custom entries), so they are sanitized before entering the prompt
+        // — matching what the analysis path already does. The plan path skipped it
+        // entirely, which left the app's most safety-relevant prompt as the one
+        // place user text reached the model unfiltered.
         if let sport = profile.primarySport, !sport.isEmpty {
-            message += "\n- Primary Sport/Activity: \(sport)"
+            message += "\n- Primary Sport/Activity: \(InputSanitizer.sanitize(sport))"
         }
 
         if !profile.medicalConditions.isEmpty {
-            message += "\n- Medical Conditions: \(profile.medicalConditions.joined(separator: ", "))"
+            message += "\n- Medical Conditions: \(profile.medicalConditions.map { InputSanitizer.sanitize($0) }.joined(separator: ", "))"
         }
 
         if let side = profile.dominantSide {
-            message += "\n- Dominant Side: \(side)"
+            message += "\n- Dominant Side: \(InputSanitizer.sanitize(side))"
         }
 
         if let meds = profile.medications, !meds.isEmpty {
-            message += "\n- Current Medications: \(meds.joined(separator: ", "))"
+            message += "\n- Current Medications: \(meds.map { InputSanitizer.sanitize($0) }.joined(separator: ", "))"
         }
 
         // Medication change history
@@ -470,7 +475,7 @@ class RehabPlanViewModel: ObservableObject {
             let recentChanges = history.suffix(10)
             message += "\n\nMEDICATION HISTORY:"
             for change in recentChanges {
-                message += "\n- \(change.action.capitalized) \(change.medication) on \(dateFormatter.string(from: change.date))"
+                message += "\n- \(change.action.capitalized) \(InputSanitizer.sanitize(change.medication)) on \(dateFormatter.string(from: change.date))"
             }
         }
 
@@ -507,12 +512,13 @@ class RehabPlanViewModel: ObservableObject {
             if !withRestrictions.isEmpty {
                 message += "\n\nACTIVE POST-SURGICAL RESTRICTIONS:"
                 for s in withRestrictions {
-                    message += "\n- \(s.name): \(s.restrictions!)"
+                    // Surgery name and restrictions are both free text.
+                    message += "\n- \(InputSanitizer.sanitize(s.name)): \(InputSanitizer.sanitize(s.restrictions!))"
                 }
             }
 
             if !background.isEmpty {
-                let condensed = background.map { "\($0.surgery.name) (\($0.surgery.year))" }.joined(separator: ", ")
+                let condensed = background.map { "\(InputSanitizer.sanitize($0.surgery.name)) (\($0.surgery.year))" }.joined(separator: ", ")
                 message += "\n\nOTHER SURGICAL HISTORY: \(condensed)"
             }
         }

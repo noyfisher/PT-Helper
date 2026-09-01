@@ -24,6 +24,15 @@ class SessionLogger: ObservableObject {
     /// produce 10 increasingly-redundant uploads.
     private static let minUploadInterval: TimeInterval = 60
     private var lastUploadAt: Date?
+    /// Total events recorded this session, never decremented.
+    ///
+    /// The upload dedup used to compare `currentLog.events.count`, which
+    /// `trimEventsIfNeeded` pins at `maxEvents` (500). Once a long session hit that
+    /// cap and one upload ran at it, the comparison was permanently equal and
+    /// uploads stopped for the rest of the session — including the forced upload on
+    /// backgrounding, which is the one that matters for crash recovery. A
+    /// monotonic counter keeps advancing after trimming starts.
+    private var totalEventsRecorded: Int = 0
     private var lastUploadedEventCount: Int = 0
 
     /// True when running inside a unit-test host. Tests drive ViewModels
@@ -104,6 +113,7 @@ class SessionLogger: ObservableObject {
         eventCount = 0
         eventsSinceLastPersist = 0
         lastUploadAt = nil
+        totalEventsRecorded = 0
         lastUploadedEventCount = 0
 
         log(.appLaunched, category: .lifecycle, message: "Session started",
@@ -155,6 +165,7 @@ class SessionLogger: ObservableObject {
         eventCount = 0
         eventsSinceLastPersist = 0
         lastUploadAt = nil
+        totalEventsRecorded = 0
         lastUploadedEventCount = 0
     }
 
@@ -166,11 +177,22 @@ class SessionLogger: ObservableObject {
         message: String,
         metadata: [String: String]? = nil
     ) {
-        let event = SessionEvent(category: category, type: type, message: message,
+        // `message` goes through the same redaction as metadata. The scrub used to
+        // cover the metadata dictionary only, so the P1-05 guarantee ("no caller can
+        // bypass it") held for one of the two fields that reach Firebase. No current
+        // call site interpolates health data into `message`, but nothing prevented
+        // one from doing so, and the tests asserted only on metadata — a future
+        // caller would have reopened the leak with no signal.
+        let event = SessionEvent(category: category, type: type,
+                                 message: Self.redactedErrorSummary(message),
                                  metadata: Self.sanitizeMetadata(metadata))
         currentLog.events.append(event)
-        eventCount = currentLog.events.count
+        totalEventsRecorded += 1
+        // Count AFTER trimming: assigning first published 501 for an array the very
+        // next line caps at 500, so the value briefly disagreed with what was
+        // actually retained.
         trimEventsIfNeeded()
+        eventCount = currentLog.events.count
 
         eventsSinceLastPersist += 1
         if eventsSinceLastPersist >= persistBatchSize {
@@ -352,8 +374,9 @@ class SessionLogger: ObservableObject {
         case .skipNoUser, .quarantineForeignOwner: return
         }
 
-        // Dedup: skip if no new events since the last upload.
-        if currentLog.events.count == lastUploadedEventCount { return }
+        // Dedup: skip if no new events since the last upload. Compares the
+        // monotonic total, not the (trimmed, capped) array length.
+        if totalEventsRecorded == lastUploadedEventCount { return }
 
         // Throttle: skip if we uploaded within the last minUploadInterval.
         // Next caller after the window will carry the accumulated events.
@@ -365,7 +388,7 @@ class SessionLogger: ObservableObject {
         // Reserve the upload slot *before* doing the IO so concurrent callers
         // don't all race past the guard.
         lastUploadAt = Date()
-        lastUploadedEventCount = currentLog.events.count
+        lastUploadedEventCount = totalEventsRecorded
 
         guard let jsonData = try? encoder.encode(currentLog) else { return }
 

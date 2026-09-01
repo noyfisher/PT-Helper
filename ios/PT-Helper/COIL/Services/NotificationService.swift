@@ -148,12 +148,25 @@ class NotificationService: ObservableObject {
     }
 
     /// Cancel all app reminders
+    /// Cancel every scheduled reminder, keeping the cached plan list.
+    ///
+    /// Used by the Settings toggle, which must be able to turn reminders back on.
+    /// This previously also cleared `lastKnownPlans`, and `resyncReminders` schedules
+    /// exclusively from that cache — so toggling reminders off and on again
+    /// scheduled nothing at all, silently, until the plans listener happened to
+    /// fire again.
     func cancelAllReminders() {
         center.removeAllPendingNotificationRequests()
         UNUserNotificationCenter.current().setBadgeCount(0)
-        // Drop the cached plan list too — otherwise a Settings toggle flipped
-        // before the next user's plans listener fires would resync reminders
-        // from the previous account's plan names (found in code review).
+    }
+
+    /// Cancel every reminder AND forget the plans they were built from.
+    ///
+    /// Sign-out only. The cache must be dropped there or a toggle flipped before
+    /// the next user's plans listener fires would resync reminders from the
+    /// previous account's plan names.
+    func cancelAllRemindersAndForgetPlans() {
+        cancelAllReminders()
         lastKnownPlans = []
     }
 
