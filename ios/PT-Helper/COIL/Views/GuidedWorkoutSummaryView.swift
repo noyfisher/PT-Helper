@@ -12,6 +12,9 @@ struct GuidedWorkoutSummaryView: View {
     @State private var notes: String = ""
     @State private var showSavedConfirmation = false
     @State private var isSaved = false
+    /// Guards leaving the summary before the session has been persisted — ending a
+    /// workout early routes here, and until Save is tapped nothing has been written.
+    @State private var showUnsavedExitConfirmation = false
     @State private var insightText: String?
     @State private var trophyBounce = false
 
@@ -125,6 +128,19 @@ struct GuidedWorkoutSummaryView: View {
         }
         .achievementCelebration()
         .trackScreen("GuidedWorkoutSummary")
+        .persistenceFailureAlert($workoutViewModel.saveFailure)
+        .interactiveDismissDisabled(!isSaved)
+        .confirmationDialog(
+            "Save this workout?",
+            isPresented: $showUnsavedExitConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Save Workout") { saveSession() }
+            Button("Discard", role: .destructive) { dismiss() }
+            Button("Keep Reviewing", role: .cancel) { }
+        } message: {
+            Text("This workout hasn't been saved yet. Leaving now discards it.")
+        }
         .onAppear {
             // Greet the finish with a success buzz + a trophy bounce the moment the
             // summary appears — not only later on Save (audit #53).

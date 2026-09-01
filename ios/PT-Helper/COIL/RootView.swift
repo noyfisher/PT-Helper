@@ -79,6 +79,12 @@ struct RootView: View {
                         AnalyticsService.shared.log(.signInCompleted)
                     }
                     Task { await ConsentService.shared.load() }
+                    // StreakService loads from Firestore only in its singleton init,
+                    // and sign-out calls reset(). Without a reload here the first
+                    // workout after a re-sign-in recomputes the streak from empty
+                    // state and overwrites the server document — destroying the real
+                    // longest streak and every earned achievement.
+                    Task { await StreakService.shared.loadFromFirestore() }
                     checkProfileCompletion()
                 } else {
                     // Finalize + clear the signing-out user's session log so it

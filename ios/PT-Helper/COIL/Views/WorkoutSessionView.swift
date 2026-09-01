@@ -181,7 +181,12 @@ struct WorkoutSessionView: View {
 
                 if !viewModel.sessions.isEmpty {
                     List {
-                        ForEach(viewModel.sessions.reversed(), id: \.id) { session in
+                        // `sessions` is already newest-first — the Firestore fetch
+                        // orders by date descending and addSession inserts at index 0.
+                        // reversed() turned "Recent Sessions" into oldest-first, so with
+                        // the 180-document fetch cap a long-time user saw their stalest
+                        // sessions at the top.
+                        ForEach(viewModel.sessions, id: \.id) { session in
                             sessionCard(for: session)
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     Button(role: .destructive) {
@@ -228,6 +233,7 @@ struct WorkoutSessionView: View {
         }
         .achievementCelebration()
         .trackScreen("WorkoutSession")
+        .persistenceFailureAlert($viewModel.saveFailure)
     }
 
     // MARK: - Helpers

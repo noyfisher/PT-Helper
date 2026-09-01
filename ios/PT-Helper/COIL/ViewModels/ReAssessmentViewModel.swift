@@ -6,6 +6,10 @@ import FirebaseAuth
 @MainActor
 class ReAssessmentViewModel: ObservableObject {
     @Published var assessments: [AssessmentSnapshot] = []
+    /// A re-assessment snapshot that did not reach Firestore. This drives the
+    /// before/after comparison, so a silent loss removes the evidence the feature
+    /// exists to show.
+    @Published var saveFailure: PersistenceFailure?
     @Published var isLoading = false
 
     private let db = Firestore.firestore()
@@ -40,7 +44,17 @@ class ReAssessmentViewModel: ObservableObject {
     func saveAssessment(_ snapshot: AssessmentSnapshot) async {
         assessments.append(snapshot)
 
-        guard let uid = Auth.auth().currentUser?.uid else { return }
+        guard let uid = Auth.auth().currentUser?.uid else {
+            // Signed out mid-flow: the snapshot is in the published array and the
+            // UI will show the check-in as recorded, but nothing was persisted.
+            // Returning silently is what made this invisible until relaunch.
+            AppLogger.data.error("Cannot save assessment: no authenticated user")
+            saveFailure = PersistenceFailure(
+                subject: "your check-in",
+                underlyingDescription: "No signed-in user"
+            )
+            return
+        }
 
         let data: [String: Any] = [
             "id": snapshot.id.uuidString,
@@ -57,6 +71,10 @@ class ReAssessmentViewModel: ObservableObject {
                 .setData(data)
         } catch {
             AppLogger.data.error("Error saving assessment: \(error.localizedDescription)")
+            saveFailure = PersistenceFailure(
+                subject: "your check-in",
+                underlyingDescription: error.localizedDescription
+            )
         }
     }
 

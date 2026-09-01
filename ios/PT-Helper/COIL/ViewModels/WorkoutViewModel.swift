@@ -8,6 +8,10 @@ class WorkoutViewModel: ObservableObject {
         didSet { recomputeDerivedStats() }
     }
     @Published var loadError: String?
+    /// A completed session that did not reach Firestore. Surfaced rather than
+    /// logged: the session is already in `sessions`, so without this the UI shows
+    /// it as saved and it disappears on the next launch.
+    @Published var saveFailure: PersistenceFailure?
     @Published var isLoading: Bool = false
     @Published private(set) var averagePain: Double = 0
 
@@ -134,9 +138,15 @@ class WorkoutViewModel: ObservableObject {
         }
         db.collection("users").document(uid).collection("workoutSessions")
             .document(session.id.uuidString)
-            .setData(sessionData) { error in
+            .setData(sessionData) { [weak self] error in
                 if let error = error {
                     AppLogger.data.error("Error saving workout session: \(error.localizedDescription)")
+                    Task { @MainActor in
+                        self?.saveFailure = PersistenceFailure(
+                            subject: "your workout",
+                            underlyingDescription: error.localizedDescription
+                        )
+                    }
                 }
             }
     }

@@ -53,6 +53,10 @@ class GuidedWorkoutViewModel: ObservableObject {
     // MARK: - Published State
 
     @Published var plan: RehabPlan
+    /// True between finding a saved checkpoint and the user answering the Resume
+    /// prompt. While set, nothing may overwrite that checkpoint — it is the only
+    /// remaining record of the interrupted workout.
+    @Published var isAwaitingCheckpointDecision = false
     @Published var currentExerciseIndex: Int = 0
     @Published var currentSet: Int = 1
     @Published var phase: WorkoutPhase = .exercise
@@ -312,6 +316,11 @@ class GuidedWorkoutViewModel: ObservableObject {
         substitutedExercises[originalName] = substitute.name
         // Reset set counter since this is a new exercise
         currentSet = 1
+        // Checkpoints are written on set completion, skip and backgrounding — but
+        // not here, so a crash after a mid-set swap restored the substitute at the
+        // PRE-swap set counter (e.g. set 3 of a 3-set exercise the user hasn't
+        // started). Persist the reset immediately.
+        saveCheckpoint()
     }
 
     // MARK: - Checkpointing
@@ -359,7 +368,11 @@ class GuidedWorkoutViewModel: ObservableObject {
     /// Restore state from a checkpoint.
     func restoreFromCheckpoint(_ checkpoint: WorkoutCheckpoint) {
         currentExerciseIndex = min(checkpoint.currentExerciseIndex, totalExercises - 1)
-        currentSet = checkpoint.currentSet
+        // Clamp: a checkpoint can outlive the shape of the plan it described (an
+        // exercise swapped for one with fewer sets, or a plan edited between runs),
+        // and an out-of-range set counter puts the workout past its own end.
+        let setsForCurrentExercise = max(1, currentExercise?.sets ?? 1)
+        currentSet = min(max(checkpoint.currentSet, 1), setsForCurrentExercise)
         completedExercises = checkpoint.completedExercises
         skippedExercises = checkpoint.skippedExercises
         substitutedExercises = checkpoint.substitutedExercises
@@ -377,6 +390,12 @@ class GuidedWorkoutViewModel: ObservableObject {
     /// final-set branch) — a live-state save here would resurrect the WS5-01 bug.
     func handleAppBackgrounded() {
         guard phase != .complete else { return }
+        // A saved checkpoint the user hasn't answered the Resume prompt for yet is
+        // still the authoritative record of their progress. This handler is live
+        // from the moment the view appears, so backgrounding while that alert is up
+        // (a call, an app switch) wrote a checkpoint for the freshly-initialised
+        // ViewModel — exercise 0, set 1, nothing completed — over the real one.
+        guard !isAwaitingCheckpointDecision else { return }
         if phase == .rest && restKind == .interExercise {
             saveCheckpoint(forNextExercise: true)
         } else {

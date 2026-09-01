@@ -66,6 +66,7 @@ struct GuidedWorkoutView: View {
             AnalyticsService.shared.log(.workoutStarted, parameters: ["exercise_count": vm.totalExercises])
             if let checkpoint = GuidedWorkoutViewModel.savedCheckpoint(forPlanId: vm.plan.id.uuidString) {
                 savedCheckpoint = checkpoint
+                vm.isAwaitingCheckpointDecision = true
                 showResumePrompt = true
             }
             // Auto-expand instructions for first encounter with exercise
@@ -77,11 +78,13 @@ struct GuidedWorkoutView: View {
                     vm.restoreFromCheckpoint(checkpoint)
                     AnalyticsService.shared.log(.workoutResumed)
                 }
+                vm.isAwaitingCheckpointDecision = false
             }
             Button("Start Fresh", role: .destructive) {
                 AnalyticsService.shared.log(.workoutCheckpointDiscarded)
                 SessionLogger.shared.logUserAction(.buttonTapped, action: "workoutCheckpointDiscarded")
                 vm.clearCheckpoint()
+                vm.isAwaitingCheckpointDecision = false
             }
         } message: {
             if let checkpoint = savedCheckpoint {
@@ -91,7 +94,12 @@ struct GuidedWorkoutView: View {
         .alert("End Workout?", isPresented: $showEndConfirmation) {
             // The destructive (red) role belongs on the irreversible action —
             // discarding — not on saving your progress (audit #47).
-            Button("Save & Finish") {
+            // "Save & Finish" promised something this button cannot do: the session
+            // is only persisted from the summary screen, which is where the pain
+            // level and notes it needs are collected. A user who tapped it and then
+            // navigated back from the summary lost the workout having been told it
+            // was saved. The label now describes what actually happens.
+            Button("Finish & Review") {
                 vm.endWorkoutEarly()
             }
             Button("Discard Without Saving", role: .destructive) {
@@ -224,6 +232,7 @@ struct GuidedWorkoutView: View {
 
                         // Phase-based instruction stepper
                         ExercisePhaseStepperView(
+                            exerciseIdentity: exercise.name,
                             startPosition: exercise.startPosition,
                             movement: exercise.movement,
                             endPosition: exercise.endPosition,

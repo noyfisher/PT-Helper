@@ -4,6 +4,13 @@ import SwiftUI
 /// one phase at a time. Handles nil fields gracefully — only shows
 /// non-nil phases, and falls back to exercise description if all are nil.
 struct ExercisePhaseStepperView: View {
+    /// Identity of the exercise being described. The stepper occupies the same
+    /// structural position for every exercise in a guided workout, so without an
+    /// explicit reset its `@State` survives the exercise change: advancing to a new
+    /// exercise kept the previously selected phase, opening instructions on "Return
+    /// Position" (or on a phase the new exercise doesn't have).
+    var exerciseIdentity: String = ""
+
     let startPosition: String?
     let movement: String?
     let endPosition: String?
@@ -22,14 +29,21 @@ struct ExercisePhaseStepperView: View {
     private var hasPhases: Bool { !phases.isEmpty }
 
     var body: some View {
-        if isExpanded {
-            if hasPhases {
-                phaseStepperContent
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            } else if let desc = exerciseDescription, !desc.isEmpty {
-                descriptionFallback(desc)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+        Group {
+            if isExpanded {
+                if hasPhases {
+                    phaseStepperContent
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                } else if let desc = exerciseDescription, !desc.isEmpty {
+                    descriptionFallback(desc)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
+        }
+        // Fires even while collapsed, so re-expanding on a new exercise starts at
+        // the first phase rather than wherever the previous exercise was left.
+        .onChange(of: exerciseIdentity) { _, _ in
+            activePhase = 0
         }
     }
 

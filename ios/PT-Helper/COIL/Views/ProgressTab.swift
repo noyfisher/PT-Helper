@@ -411,11 +411,15 @@ struct ProgressTabContent: View {
     }
 
     private func painTrendAccessibilityValue(for data: [WorkoutSession]) -> String {
-        guard data.count >= 2, let first = data.first, let last = data.last else {
+        guard data.count >= 2, let newest = data.first, let oldest = data.last else {
             return "Not enough data yet to show a trend."
         }
-        let firstPain = Int(painValueForChart(first))
-        let lastPain = Int(painValueForChart(last))
+        // `filteredChartData` preserves WorkoutViewModel's newest-first order, so
+        // data.first is the LATEST session. Treating it as the start of the trend
+        // reversed both the direction and the endpoints: a user whose pain improved
+        // from 8 to 2 was told it had gone up.
+        let firstPain = Int(painValueForChart(oldest))
+        let lastPain = Int(painValueForChart(newest))
         let direction = lastPain < firstPain ? "down" : (lastPain > firstPain ? "up" : "steady")
         return "Pain trended \(direction), from \(firstPain) to \(lastPain) out of 10 over the last \(data.count) sessions."
     }

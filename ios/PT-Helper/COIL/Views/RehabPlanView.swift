@@ -312,6 +312,7 @@ struct RehabPlanView: View {
             ])
         }
         .trackScreen("RehabPlan")
+        .persistenceFailureAlert($reAssessmentVM.saveFailure)
     }
 
     // MARK: - Re-Assessment Sheet
