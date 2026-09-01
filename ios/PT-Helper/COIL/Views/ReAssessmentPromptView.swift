@@ -16,9 +16,14 @@ struct ReAssessmentPromptView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(titleText)
                         .font(AppFonts.smallSemiBold)
+                        // No explicit colour meant Color.primary — black in light
+                        // mode — on accentTint over the fixed-dark bgGradient, so
+                        // the banner's headline was invisible in the default
+                        // appearance while its CTA stayed readable.
+                        .foregroundColor(AppColors.textOnDark)
                     Text(subtitleText)
                         .font(AppFonts.caption)
-                        .foregroundColor(AppColors.secondaryText)
+                        .foregroundColor(AppColors.textOnDarkMuted)
                 }
 
                 Spacer()

@@ -119,7 +119,10 @@ struct WellnessDetailView: View {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(Color(.systemGray5))
+                            // systemGray5 is #2C2C2E in dark mode — indistinguishable
+                            // from the dark page, leaving the goal-progress bar with a
+                            // filled stub and no reference length.
+                            .fill(AppColors.subtleBorder)
                             .frame(height: 3)
                         Capsule()
                             .fill(AppColors.accent)

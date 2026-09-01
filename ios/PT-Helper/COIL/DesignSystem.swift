@@ -116,7 +116,13 @@ enum AppColors {
     static let accentLight = Color(CoilPalette.accentBright)
     static let accentDark  = Color(CoilPalette.accentDeeper)
     static let accentTint  = Color(CoilPalette.accent).opacity(0.10)
-    static let accentText = Color(CoilPalette.accentDeep)  // AA text: 5.16:1 on white, 5.7:1 on dark cards
+    /// Accent-coloured text. AA on white (5.16:1) and on a dark card **in dark
+    /// mode** (5.7:1) — but NOT on the surfaces that are dark in both appearances:
+    /// in light mode the token resolves to the darker #0B7A78 and measures 3.37:1
+    /// on `darkSurface` and 2.88:1 on accentTint over `bgGradient`. On those, use
+    /// `textOnDark`/`textOnDarkMuted` instead. The old comment promised 5.7:1
+    /// unconditionally, which is how it ended up on fixed-dark grounds.
+    static let accentText = Color(CoilPalette.accentDeep)
 
     // MARK: Chip
     static let chipSelectedBg     = Color(CoilPalette.accentDeeper)
@@ -125,7 +131,13 @@ enum AppColors {
 
     // MARK: Card styling
     static let cardBorder      = Color(CoilPalette.hairline)
-    static let cardShadowColor = Color.black.opacity(0.06)
+    /// Card elevation. Adaptive: a black shadow contributes nothing against the
+    /// dark page and dark cards, so in dark mode the whole elevation scale
+    /// collapsed to a flat look. A light rim reads as depth there instead.
+    static let cardShadowColor = Color(CoilPalette.dyn(
+        UIColor.black.withAlphaComponent(0.06),
+        UIColor.white.withAlphaComponent(0.10)
+    ))
     static let inputFocusBorder = Color(CoilPalette.accent)
 
     // MARK: Gradients

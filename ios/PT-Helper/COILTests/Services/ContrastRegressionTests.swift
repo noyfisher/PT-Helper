@@ -103,6 +103,33 @@ final class ContrastRegressionTests: XCTestCase {
         assertReadable(AppColors.ctaText, on: AppColors.danger, "White on danger")
     }
 
+    // MARK: - Tinted banners over the fixed-dark ground (I2)
+
+    /// The disclaimer and verification badges sit on 8-10% tints composited over
+    /// the fixed-dark gradient, so an adaptive text token reads dark-on-dark in
+    /// light mode. These are always-on-screen medical caveats.
+    func testTintedBannerText_overFixedDarkGround_isReadableInBothModes() {
+        assertReadable(AppColors.textOnDarkMuted, on: AppColors.darkSurface,
+                       "Disclaimer / verification badge text", floor: 3.0)
+    }
+
+    /// The re-assessment prompt's headline had no explicit colour at all, so it
+    /// inherited Color.primary and went black on the dark banner in light mode.
+    func testReAssessmentPromptTitle_usesAnOnDarkToken() {
+        assertReadable(AppColors.textOnDark, on: AppColors.darkSurface,
+                       "Re-assessment prompt title")
+    }
+
+    /// The week strip is painted on the fixed-dark nav background, where the
+    /// adaptive hairline resolves to black and the "no session" ring disappears.
+    func testWeekStripEmptyDayMarker_isVisibleOnTheFixedDarkStrip() {
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let value = contrast(Color.white.opacity(0.35), on: AppColors.navBackground, style)
+            XCTAssertGreaterThan(value, 1.1,
+                                 "The empty-day marker must be perceptible in \(style == .light ? "light" : "dark") mode")
+        }
+    }
+
     // MARK: - Borders
 
     /// Unselected chips have a clear fill, so a border that vanishes leaves no

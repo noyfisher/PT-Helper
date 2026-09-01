@@ -330,6 +330,19 @@ struct BodyMap3DView: View {
         ZStack {
             RealityView { content in
                 content.camera = .virtual
+                // KNOWN GAP (cosmetic, light mode only): the RealityView renders its
+                // own opaque backdrop, which reads as a mid-grey slab (~#AFB3B3)
+                // against the light page (#F3F5F4). In dark mode the two happen to
+                // match, so the viewport only looks seamless there.
+                //
+                // `content.environment.background` is visionOS-only — it does not
+                // exist on iOS — so the scene backdrop cannot simply be painted from
+                // `BodyMapConstants.sceneBackground` the way the surrounding SwiftUI
+                // layer is. The remaining option is a background plane entity behind
+                // the model, which is deliberately NOT done here: this is the app's
+                // primary assessment surface and its hit-testing (including the
+                // invisible zone proxies) is the fragile part, so trading a colour
+                // mismatch for a hit-testing regression is the wrong bargain.
 
                 do {
                     let regionKeys = Set(viewModel.regions.map(\.zoneKey))

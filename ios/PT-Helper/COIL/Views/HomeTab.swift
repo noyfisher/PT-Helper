@@ -145,7 +145,10 @@ private struct DayCell: View {
             if isCompleted {
                 Circle().fill(AppColors.success).frame(width: 6, height: 6)
             } else {
-                Circle().stroke(AppColors.cardBorder, lineWidth: 1).frame(width: 6, height: 6)
+                // The week strip sits on the fixed-dark navBackground, where the
+                // adaptive hairline resolves to black in light mode and the
+                // "no session" marker vanishes entirely.
+                Circle().stroke(Color.white.opacity(0.35), lineWidth: 1).frame(width: 6, height: 6)
             }
         }
         .frame(width: 44, height: 66)

@@ -85,7 +85,9 @@ struct WellnessResultView: View {
                 .foregroundColor(AppColors.accent)
             Text(viewModel.analysisResult?.disclaimerText ?? "This is educational wellness guidance — not a medical diagnosis or treatment plan.")
                 .font(AppFonts.caption)
-                .foregroundColor(AppColors.secondaryText)
+                // accentTint over the fixed-dark bgGradient — the adaptive token
+                // goes dark-on-dark in light mode.
+                .foregroundColor(AppColors.textOnDarkMuted)
         }
         .padding(AppSpacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)

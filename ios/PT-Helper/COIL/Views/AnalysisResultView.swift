@@ -126,7 +126,10 @@ struct AnalysisResultView: View {
                 .foregroundColor(AppColors.accent)
             Text(analysisResult.disclaimerText)
                 .font(AppFonts.caption)
-                .foregroundColor(AppColors.secondaryText)
+                // On accentTint over the fixed-dark bgGradient, so the adaptive
+                // token resolved to dark-on-dark in light mode (~2.1:1). This is
+                // the medical disclaimer and it is always on screen.
+                .foregroundColor(AppColors.textOnDarkMuted)
         }
         .padding()
         .background(AppColors.accentTint)
@@ -181,12 +184,12 @@ struct AnalysisResultView: View {
                     .foregroundColor(AppColors.success)
                 Text("Reviewed by a second AI pass + safety checks")
                     .font(AppFonts.caption)
-                    .foregroundColor(AppColors.secondaryText)
+                    .foregroundColor(AppColors.textOnDarkMuted)
                     .multilineTextAlignment(.leading)
                 Spacer()
                 Image(systemName: "info.circle")
                     .font(.caption)
-                    .foregroundColor(AppColors.secondaryText)
+                    .foregroundColor(AppColors.textOnDarkMuted)
             }
             .padding(AppSpacing.md)
             .frame(maxWidth: .infinity)
