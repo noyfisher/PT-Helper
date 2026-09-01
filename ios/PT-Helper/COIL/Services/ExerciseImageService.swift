@@ -296,9 +296,16 @@ final class ExerciseImageService: @unchecked Sendable {
 
     /// Fetch remote aliases from Firestore and merge with hardcoded aliasMap.
     func fetchRemoteAliases() async {
-        // Only fetch once per hour
-        if let lastFetch = firestoreAliasesLastFetch,
-           Date().timeIntervalSince(lastFetch) < 3600 { return }
+        // Only fetch once per hour. The freshness check reads
+        // `firestoreAliasesLastFetch` under the SAME lock that guards its write —
+        // it was previously read unsynchronised, a data race with the write below
+        // (every exercise card calls this on appear, so concurrent entry is the
+        // normal case, not an edge one).
+        let isFresh = lock.withLock {
+            guard let lastFetch = firestoreAliasesLastFetch else { return false }
+            return Date().timeIntervalSince(lastFetch) < 3600
+        }
+        if isFresh { return }
 
         do {
             let doc = try await Firestore.firestore().collection("config").document("exerciseImageAliases").getDocument()
@@ -463,6 +470,24 @@ final class ExerciseImageService: @unchecked Sendable {
 
     /// Layers 4-7: progressively looser matching strategies.
     private func fuzzyMatch(_ normalized: String) -> ImageMatch? {
+        let toggled = normalized.hasSuffix("s") ? String(normalized.dropLast()) : normalized + "s"
+
+        // Layer 3b: whole-string plural/singular toggle against an EXACT key.
+        //
+        // This has to run before the prefix/suffix layers, not after them. Those
+        // layers happily match a longer, more specialised key, so a singular name
+        // whose exact plural exists was hijacked before the toggle ever ran:
+        // "Hamstring Curl" resolved to `hamstring-curl-band` (adds a resistance
+        // band) rather than `hamstring-curls`, "Deadlift" to `dumbbell-deadlift`
+        // (adds load), and "Dumbbell Lateral Raise" to the single-leg balance
+        // variant. 62 singular forms in the shipped mapping resolved this way.
+        //
+        // An exact key differing only in plurality is a better answer than any
+        // fuzzy match, and in a PT app the difference is not cosmetic: the
+        // illustration is what the user copies, so a banded or single-leg variant
+        // shown for an unloaded prescription is a wrong instruction.
+        if mapping[toggled] != nil { return ImageMatch(key: toggled, matchType: .pluralToggle) }
+
         // Layer 4: Longest prefix match
         // e.g. "cat-cow-stretch-modified-for-lower-back-relief" starts with "cat-cow-stretch-"
         if let match = longestPrefixMatch(normalized) { return ImageMatch(key: match, matchType: .prefixFuzzy) }
@@ -471,9 +496,7 @@ final class ExerciseImageService: @unchecked Sendable {
         // e.g. "calf-raises" is a suffix of "standing-calf-raises"
         if let match = suffixMatch(normalized) { return ImageMatch(key: match, matchType: .suffixFuzzy) }
 
-        // Layer 6: Plural/singular toggle, then retry layers 4-5
-        let toggled = normalized.hasSuffix("s") ? String(normalized.dropLast()) : normalized + "s"
-        if mapping[toggled] != nil { return ImageMatch(key: toggled, matchType: .pluralToggle) }
+        // Layer 6: fuzzy retries on the toggled form.
         if let match = longestPrefixMatch(toggled) { return ImageMatch(key: match, matchType: .pluralToggle) }
         if let match = suffixMatch(toggled) { return ImageMatch(key: match, matchType: .pluralToggle) }
 

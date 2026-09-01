@@ -52,22 +52,33 @@ struct ExerciseImageView: View {
 
             if !isCompact, startImage != nil {
                 endImage = await ExerciseImageService.shared.loadEndImage(for: exercise)
-                if endImage != nil {
-                    startCrossFadeLoop()
-                }
             }
 
             ExerciseImageService.shared.logMissingImageIfNeeded(for: exercise)
+
+            // Run the cross-fade INSIDE this structured task rather than spawning a
+            // detached one. The old `Task { while … }` outlived the view: it was
+            // never cancelled on teardown, ignored cancellation (`try?` swallowed
+            // it), and its captured @State boxes kept the loop alive with nothing
+            // left to render into — one leaked ticker per exercise card shown.
+            if endImage != nil {
+                await runCrossFadeLoop()
+            }
         }
     }
 
-    private func startCrossFadeLoop() {
-        Task { @MainActor in
-            while endImage != nil && startImage != nil {
-                try? await Task.sleep(nanoseconds: UInt64(holdSeconds * 1_000_000_000))
-                guard endImage != nil else { break }
-                withAnimation(.easeInOut(duration: 0.4)) { showingEnd.toggle() }
+    /// Cross-fade between the start and end frames until the enclosing `.task`
+    /// is cancelled — i.e. until the view goes away. `Task.sleep` throws on
+    /// cancellation and that is deliberately allowed to end the loop.
+    private func runCrossFadeLoop() async {
+        while endImage != nil && startImage != nil {
+            do {
+                try await Task.sleep(nanoseconds: UInt64(holdSeconds * 1_000_000_000))
+            } catch {
+                return  // cancelled — the view is gone
             }
+            guard !Task.isCancelled, endImage != nil else { return }
+            withAnimation(.easeInOut(duration: 0.4)) { showingEnd.toggle() }
         }
     }
 
