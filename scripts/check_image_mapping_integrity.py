@@ -23,7 +23,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = SCRIPT_DIR / "output"
 MAPPING_FILE = OUTPUT_DIR / "exercise_image_mapping.json"
 IOS_MAPPING = (
-    SCRIPT_DIR.parent / "ios" / "PT-Helper" / "PT-Helper"
+    SCRIPT_DIR.parent / "ios" / "PT-Helper" / "COIL"
     / "Resources" / "exercise_image_mapping.json"
 )
 

@@ -17,7 +17,7 @@ MAPPING_FILE = OUTPUT_DIR / "exercise_image_mapping.json"
 METADATA = OUTPUT_DIR / "all_exercises_metadata.json"
 STOCKPILE = OUTPUT_DIR / "stockpile_progress.json"
 IOS_MAPPING = (
-    SCRIPT_DIR.parent / "ios" / "PT-Helper" / "PT-Helper"
+    SCRIPT_DIR.parent / "ios" / "PT-Helper" / "COIL"
     / "Resources" / "exercise_image_mapping.json"
 )
 
