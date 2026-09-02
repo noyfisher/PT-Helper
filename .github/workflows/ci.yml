@@ -270,7 +270,6 @@ jobs:
           # Nothing here runs git against the remote, so don't leave the
           # credential in .git/config for later steps to find.
           persist-credentials: false
-        with:
           fetch-depth: 0  # Full history for changelog generation
 
       - name: Select Xcode
