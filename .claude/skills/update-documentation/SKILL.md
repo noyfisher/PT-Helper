@@ -25,7 +25,7 @@ Emit a single status line before and after each phase:
 2. **Checkpoint before writing** — always create the snapshot commit first (per the user's version-control-safety memory). The user can revert the entire sync with `git reset --hard HEAD~1`.
 3. **Memory files live outside the repo** at `~/.claude/projects/-Users-noyfisher-IOS-Projects-PT-Helper-Agent-v1/memory/`. Git checkpoint does NOT cover them — back them up separately to `/tmp/memory-backup-<timestamp>/` before rewriting.
 4. **R1 applies — grep before rewriting any specific fact.** Never trust an old number, file count, or enum name from the doc itself. Always read the current source.
-5. **Skip historical artifacts.** Do not touch point-in-time records: anything under `docs/archive/` or `scripts/archive/`, `virtual-users/results/**`, `CHANGELOG.md`, or anything under `vendor/`, `node_modules/`, `build/`, `DerivedData/`. Dated filenames (`*-YYYY-MM-DD.*`) are a reliable tell.
+5. **Skip historical artifacts.** Do not touch point-in-time records: anything under `docs/archive/` or `scripts/archive/`, `virtual-users/results/**`, or anything under `vendor/`, `node_modules/`, `build/`, `DerivedData/`. Dated filenames (`*-YYYY-MM-DD.*`) are a reliable tell.
 6. **Do not auto-commit the rewrites.** Leave them uncommitted so the user can review the diff before deciding to commit.
 7. **Flag uncertain items rather than guessing.** If you can't verify a fact from code, leave the doc unchanged and report it in the "needs human input" section.
 
@@ -41,7 +41,7 @@ Read `$ARGUMENTS` to determine scope. Default is `all`.
 | `claude` | CLAUDE.md only |
 | `memory` | Memory files only |
 | `docs` | docs/ folder only |
-| `setup` | README.md, CONTRIBUTING.md, scripts/README.md, backend/SETUP.md, ios/LAYOUT.md, manual-qa-checklist.md |
+| `setup` | README.md, CONTRIBUTING.md, scripts/README.md, functions/README.md, ios/LAYOUT.md, manual-qa-checklist.md |
 | `dry-run` | Survey + report what would change; **no checkpoint, no writes** |
 
 **Guard:**
@@ -95,7 +95,7 @@ Spawn `Explore` agent:
 
 ### Survey B — AI Pipeline State
 Spawn `Explore` agent:
-> In `ios/PT-Helper/COIL/Services/ClaudeAPIService.swift`, list every `case ` in the `AIRequestType` enum with its raw value and a 1-line purpose comment if present. Also in `functions/src/index.ts`, list every key in `SYSTEM_PROMPTS` and every key in `MODEL_CONFIG`. Also list every `export const ` in `functions/src/index.ts` (Cloud Functions). Report as three short tables. Under 300 words.
+> In `ios/PT-Helper/COIL/Services/ClaudeAPIService.swift`, list every `case ` in the `AIRequestType` enum with its raw value and a 1-line purpose comment if present. Also in `functions/src/prompts.ts`, list every key in `SYSTEM_PROMPTS` and every key in `MODEL_CONFIG`. Also list every `export const ` in `functions/src/index.ts` (Cloud Functions). Report as three short tables. Under 300 words.
 
 ### Survey C — Validation & Pipelines
 Spawn `Explore` agent:
@@ -123,7 +123,7 @@ Spawn `Explore` agent:
 > - `README.md`
 > - `CONTRIBUTING.md`
 > - `scripts/README.md`
-> - `backend/SETUP.md`
+> - `functions/README.md`
 > - `ios/LAYOUT.md`
 > - `ios/PT-Helper/docs/manual-qa-checklist.md`
 >
@@ -205,7 +205,7 @@ Agent prompt skeleton:
 > - `README.md`
 > - `CONTRIBUTING.md`
 > - `scripts/README.md`
-> - `backend/SETUP.md`
+> - `functions/README.md`
 > - `ios/LAYOUT.md`
 > - `ios/PT-Helper/docs/manual-qa-checklist.md`
 >

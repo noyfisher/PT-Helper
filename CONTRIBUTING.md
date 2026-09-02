@@ -1,146 +1,110 @@
-# Contributing to PT Helper
+# Contributing to COIL
 
-## Development Setup
+## Prerequisites
 
-### Prerequisites
-- Xcode 16+
-- iOS 17+ simulator or device
-- Node.js 20 (for Cloud Functions)
-- Firebase CLI (`npm install -g firebase-tools`)
+- **Xcode 16+** — the project uses `PBXFileSystemSynchronizedRootGroup`, so new
+  Swift files are auto-discovered and no `.pbxproj` edits are needed
+- **iOS 18.2 deployment target** — an iPhone 16 simulator on iOS 18.2 is the
+  reference device
+- **Node 22** for the Cloud Functions (`functions/package.json` `engines`)
+- **Firebase CLI** (`npm install -g firebase-tools`)
+- **Ruby + bundler** — only for fastlane (`ios/PT-Helper/Gemfile`); not needed to
+  build or test the app
+- **Python 3** for the exercise-image pipeline in `scripts/`
+  (`scripts/requirements.txt`)
 
-### Getting Started
-1. Clone the repo and open `ios/PT-Helper/COIL.xcodeproj`
-2. Add your `GoogleService-Info.plist` to `ios/PT-Helper/COIL/`
-3. Build and run on a simulator
+Getting the app running: clone, open `ios/PT-Helper/COIL.xcodeproj`, drop your
+`GoogleService-Info.plist` into `ios/PT-Helper/COIL/`, build and run.
 
-## Project Structure
+## Where things live
 
-```
-ios/PT-Helper/COIL/
-├── Models/          # Data models (22 files)
-├── Services/        # API, validation, logging, caching (27 files)
-├── ViewModels/      # Business logic, state management (15 files)
-├── Views/           # SwiftUI views (79 files)
-│   ├── Components/  # Reusable UI components
-│   ├── Dashboard/   # Dashboard widgets and charts
-│   └── OnboardingSteps/
-├── Resources/       # Exercise images (1364 start+end frames), JSON mappings
-└── DesignSystem.swift  # Design tokens and shared components
-```
+- `ios/LAYOUT.md` — the iOS file map: every Model, ViewModel, View, Service and
+  test file with a one-line description
+- `functions/README.md` — the Cloud Functions backend: every deployed function,
+  the source map, and the build/test/deploy commands
+- `scripts/README.md` — the exercise-image pipeline: what each script does and
+  the order they run in
 
-## Code Style
+## Build & test
 
-### Design System
-Use the design tokens from `DesignSystem.swift` — never hardcode values:
-
-- **Spacing**: `AppSpacing.xs/sm/md/lg/xl/xxl/xxxl` (4-40pt)
-- **Colors**: `AppColors.accent/success/warning/danger/cardBackground/inputBackground`
-- **Corner radius**: `AppCorners.small/medium/card/large/xl/pill`
-- **Typography**: `AppFonts.heroTitle/sectionTitle/cardTitle/statNumber/badge`
-- **Animations**: `AppAnimations.springy/smooth/bouncy`
-
-### Card-based UI
-Use `CardSection` for form sections and `.cardStyle()` modifier for card elevation:
-
-```swift
-CardSection(icon: "heart.fill", color: .red, title: "Medical") {
-    // Content
-}
-```
-
-### Reusable Components
-- `ChipButton` — Selectable tag/chip
-- `FlowLayout` — Wrapping horizontal layout
-- `StyledTextField` — Consistent text input
-- `EmptyStateView` — Empty state placeholder
-- `QuickActionCard` / `QuickActionButton` — Navigation cards
-
-### SwiftUI Patterns
-- Views use `@ObservedObject` or `@StateObject` for view models
-- Navigation uses `NavigationStack` with programmatic navigation
-- Screen tracking: `.trackScreen("ScreenName")` modifier
-
-## Adding a New Feature
-
-### New Model
-1. Create a `Codable` struct in `Models/`
-2. Add Firestore serialization if persisted (see `UserProfile.from(firestoreData:)`)
-3. Xcode 16 auto-discovers new files — no pbxproj edits needed
-
-### New View
-1. Create in `Views/` (or `Views/Components/` for reusable components)
-2. Use `DesignSystem.swift` tokens
-3. Add `.trackScreen()` for session logging
-
-### New Service
-1. Create in `Services/`
-2. Use singleton pattern for shared services (`static let shared`)
-
-### New Exercise
-1. Add to `scripts/exercise_list.json` with metadata
-2. Generate image: `python scripts/generate_exercise_images.py --exercise "exercise-name"`
-3. Run QA: `python scripts/qa_exercise_images.py`
-4. Copy to `ios/PT-Helper/COIL/Resources/`
-5. Update `exercise_image_mapping.json`
-
-## Testing
-
-### Running Tests
 ```bash
-# All tests
+# Build
+xcodebuild build -project ios/PT-Helper/COIL.xcodeproj \
+  -scheme COIL -destination 'platform=iOS Simulator,name=iPhone 16'
+
+# Run all unit tests (default: UnitPlan)
 xcodebuild test -project ios/PT-Helper/COIL.xcodeproj \
   -scheme COIL -destination 'platform=iOS Simulator,name=iPhone 16'
 
-# Or use Cmd+U in Xcode
+# Full suite including collision tests (300s timeout)
+xcodebuild test -project ios/PT-Helper/COIL.xcodeproj \
+  -scheme COIL -testPlan FullPlan -destination 'platform=iOS Simulator,name=iPhone 16'
+
+# Pre-release suite: all unit + UI tests with code coverage (600s timeout)
+xcodebuild test -project ios/PT-Helper/COIL.xcodeproj \
+  -scheme COIL -testPlan PreReleasePlan -destination 'platform=iOS Simulator,name=iPhone 16'
+
+# A single test class or method
+xcodebuild test -project ios/PT-Helper/COIL.xcodeproj \
+  -scheme COIL -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -only-testing:COILTests/UserProfileTests/testDefaultUserProfile
 ```
 
-### Test Organization
-Tests mirror the source structure:
-- `Models/` — Data model tests (encoding, enums, validation)
-- `Services/` — Service tests (API, prompts, filtering)
-- `ViewModels/` — ViewModel tests (state, navigation)
+> On some machines `name=iPhone 16` resolves to the wrong runtime and the build
+> fails to find a destination. Append `,OS=18.2` — e.g.
+> `-destination 'platform=iOS Simulator,name=iPhone 16,OS=18.2'` — or target the
+> simulator by UDID.
 
-### Writing Tests
-- Name test files `<ClassName>Tests.swift`
-- Use descriptive test names: `test_classifySurgery_sameRegion_recentWithRestrictions`
-- Test edge cases: empty arrays, nil optionals, boundary values
-- Mock external services (API calls, Firebase)
+### Test plans and their roles
 
-## Git Workflow
+| Plan | Role |
+|---|---|
+| `UnitPlan` | **PR gate.** All unit tests; runs on every push/PR to `main` |
+| `FullPlan` | **Nightly.** Unit + body-map collision + UI tests; failures are triaged the next morning, they don't block |
+| `PreReleasePlan` | **Release gate.** Same targets as FullPlan plus code coverage; run manually before a TestFlight build |
+| `SmokePlan` | Local quick check only. It is an 11-test allow-list over a ~1,140-method suite — do not reintroduce it as a CI gate |
 
-### Branches
-- `main` — Production-ready code
-- Feature branches from `main`
+### Cloud Functions
 
-### Commits
-Write descriptive commit messages:
-```
-Add "Apply to All Regions" button for multi-region pain assessment
-```
-
-### Before Submitting
-1. All tests pass (`Cmd+U`)
-2. Build succeeds with no warnings in your code
-3. New features have tests
-4. Design system tokens used (no hardcoded colors/spacing)
-
-## Cloud Functions
-
-### Local Development
 ```bash
 cd functions
-npm install
-npm run build    # Compile TypeScript
-npm run serve    # Local emulator
+npm ci
+npm run lint
+npm run build             # prebuild codegen + tsc → lib/
+npm test                  # jest unit suite, no emulator needed
+npm run test:rules        # Firestore security rules (Firebase emulator + Java 21)
+npm run test:integration  # integration suite (Firebase emulator + Java 21)
 ```
 
-### Deployment
-```bash
-firebase deploy --only functions
-```
+## Conventions
 
-### Adding a New Request Type
-1. Add system prompt to `SYSTEM_PROMPTS` in `functions/src/index.ts`
-2. Add model config to `MODEL_CONFIG`
-3. Add corresponding `AIRequestType` case in iOS `ClaudeAPIService.swift`
-4. Add response parsing in the appropriate ViewModel
+- **Design tokens only.** Colors, spacing, typography, corner radii and
+  animations come from `DesignSystem.swift` (`AppColors`, `AppSpacing`,
+  `AppFonts`, `AppCorners`, `AppAnimations`). Never hardcode a color or a
+  spacing value. Use `CardSection` for form sections, `.cardStyle()` for card
+  elevation, `ChipButton` for selectable tags.
+- **Test naming:** `test<What>_<Condition>_<Expected>`, e.g.
+  `testClassifySurgery_sameRegion_recentWithRestrictions`. Fixtures come from
+  `ios/PT-Helper/COILTests/TestFixtures.swift`; ViewModels need `@MainActor` in tests.
+- **Accessibility identifiers:** `screenName.elementName`, e.g.
+  `workout.completeSetButton`. Identify the leaf control, not the wrapper — an
+  identifier on a container can hide its children from XCUI.
+- **AI prompts are server-side.** System prompts and per-request-type model
+  configuration live in `functions/src/prompts.ts` (`SYSTEM_PROMPTS`,
+  `MODEL_CONFIG`), so a prompt change ships with a function deploy rather than an
+  App Store release. `functions/src/index.ts` only imports them.
+- **Session logging:** add `.trackScreen("ScreenName")` to new views.
+
+## Git workflow
+
+1. Branch from `main`; rebase on `main` often and keep branches small.
+2. `UnitPlan` green locally before opening a PR — it is the gate CI enforces.
+3. `FullPlan` green before merging.
+4. Stage by explicit path. Never `git add .` or `git commit -a` — parallel
+   sessions share one git index in the main checkout.
+5. Running more than one session at a time? One git worktree per session, one
+   simulator per session, and never two Firebase deploys at once. Recipes are in
+   `ios/PT-Helper/docs/parallel-sessions.md`.
+
+Before submitting: tests pass, the build is warning-free (warnings are errors in
+this project), new behavior has tests, and no hardcoded design values.

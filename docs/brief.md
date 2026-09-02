@@ -1,4 +1,4 @@
-# Product Brief (PT Helper)
+# Product Brief (COIL)
 
 Goal: Help athletes self-assess pain via a 3D body map, answer PT-style questions, and receive AI-powered condition analysis with personalized rehab plans and guided workouts.
 

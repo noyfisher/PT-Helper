@@ -21,7 +21,7 @@ Emit a single status line before starting each phase and after completing it:
 1. **Never modify `main` branch** — always work in a new `agent/improve-*` branch
 2. **Never force-push** — if push fails, stop and report
 3. **Never modify existing passing tests** — only ADD new tests or new assertions
-4. **Never change these files**: `DesignSystem.swift`, `ClaudeAPIService.swift`, `functions/src/index.ts`, `CLAUDE.md`
+4. **Never change these files**: `DesignSystem.swift`, `ClaudeAPIService.swift`, `functions/src/index.ts`, `functions/src/prompts.ts`, `CLAUDE.md`
 5. **Max 3 files changed** per cycle — keeps PRs small and reviewable
 6. **Always run SmokePlan** before creating a PR
 7. **Revert everything on test failure** — do not create PRs with failing tests
@@ -113,8 +113,8 @@ gh pr list --label agent-improvement --state open --json number --jq 'length'
 **Naming convention**: `screenName.elementName` (e.g., `dashboard.streakBadge`, `settings.logoutButton`)
 
 **Priority targets** (lowest coverage first):
-1. Views in `ios/PT-Helper/COIL/Views/Dashboard/` — check each file for missing identifiers
-2. Views in `ios/PT-Helper/COIL/Views/Components/` — reusable components often lack identifiers
+1. Views in `ios/PT-Helper/COIL/Views/Components/` — reusable components often lack identifiers
+2. Views in `ios/PT-Helper/COIL/Views/` — screen-level views added since the last accessibility pass
 3. Any View file with buttons, text fields, or toggles that lack identifiers
 
 **Reference pattern**: Read `ios/PT-Helper/COIL/Views/GuidedWorkoutView.swift` to see how identifiers are applied consistently.
@@ -340,7 +340,7 @@ When `$ARGUMENTS` is empty or `auto`, pick a category automatically using this p
 2. **accessibility** — Check for views missing identifiers:
    ```bash
    # If many views lack identifiers, pick accessibility
-   grep -rL "accessibilityIdentifier" ios/PT-Helper/COIL/Views/Dashboard/ --include="*.swift" | head -5
+   grep -rL "accessibilityIdentifier" ios/PT-Helper/COIL/Views/ --include="*.swift" | head -5
    ```
 
 3. **code-quality** — Check for hardcoded colors:

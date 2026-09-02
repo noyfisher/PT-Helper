@@ -1,4 +1,4 @@
-<!-- GENERATED MIRROR — canonical text lives in ios/PT-Helper/PT-Helper/Models/LegalContent.swift. Edit there, then re-sync this file. -->
+<!-- GENERATED MIRROR — canonical text lives in ios/PT-Helper/COIL/Models/LegalContent.swift. Edit there, then re-sync this file. -->
 # Consumer Health Data Privacy Policy
 
 **Last Updated: July 2026**

@@ -17,14 +17,14 @@ The feature name is `$ARGUMENTS`. Use it to derive the request type key (snake_c
 
 ### 1. Server Side — Firebase Cloud Function
 
-**File:** `functions/src/index.ts`
+**File:** `functions/src/prompts.ts`
 
-Add the system prompt to `SYSTEM_PROMPTS` (line ~83):
+Add the system prompt to `SYSTEM_PROMPTS`:
 ```typescript
 feature_name: `Your system prompt here...`,
 ```
 
-Add model config to `MODEL_CONFIG` (line ~273):
+Add model config to `MODEL_CONFIG` (same file):
 ```typescript
 feature_name: { model: "claude-haiku-4-5-20251001", max_tokens: 4096, temperature: 0.2 },
 ```
@@ -129,7 +129,7 @@ Then build and run the app to verify the new request type works end-to-end.
 
 | File | Change |
 |------|--------|
-| `functions/src/index.ts` | Add to `SYSTEM_PROMPTS` + `MODEL_CONFIG` |
+| `functions/src/prompts.ts` | Add to `SYSTEM_PROMPTS` + `MODEL_CONFIG` |
 | `ios/PT-Helper/COIL/Services/ClaudeAPIService.swift` | Add `AIRequestType` case |
 | `ios/PT-Helper/COIL/ViewModels/<New>ViewModel.swift` | New or modified ViewModel |
 | `ios/PT-Helper/COILTests/Services/ClaudeAPIServiceTests.swift` | Add raw value assertion |

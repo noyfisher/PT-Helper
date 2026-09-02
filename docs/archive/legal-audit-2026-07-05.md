@@ -1,3 +1,5 @@
+> **Historical.** Audit of branch `mvvc-rebrand-improvements` (no longer exists). Finding A6 (legal-doc dates) has since been fixed; see `ios/PT-Helper/docs/security-review-2026-06-10.md` for current compliance status.
+
 # PT-Helper Legal & Compliance Audit
 
 **Date:** 2026-07-05 · **Branch audited:** `mvvc-rebrand-improvements` (clean tree) · **Live exposure:** ~25–30 TestFlight beta testers

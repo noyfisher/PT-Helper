@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Docs map:** `README.md` (overview) → this file (engineering rules + architecture reference) → `CONTRIBUTING.md` (setup + workflow) → `ios/LAYOUT.md` (iOS file map) → `functions/README.md` → `scripts/README.md` → `docs/` (product brief, UX flows, data models, API, safety, legal texts) → `docs/archive/` (history) → `ios/PT-Helper/docs/tester-welcome-note.md` (TestFlight testers).
+
 ## Build & Test Commands
 
 ### iOS App
@@ -44,8 +46,13 @@ npm install
 npm run build        # Compile TypeScript → lib/
 npm run serve        # Local emulator
 npm run lint         # ESLint
+npm test             # Jest unit suite (no emulator needed)
+npm run test:rules   # Firestore security rules (emulator)
+npm run test:integration  # Integration suite (emulator)
 firebase deploy --only functions
 ```
+
+`test:rules` and `test:integration` wrap Jest in `firebase emulators:exec --project demo-coil`, so they additionally need Java 21 and `firebase-tools` installed.
 
 ## Engineering Protocol (required)
 
@@ -109,7 +116,7 @@ The iOS app (`ios/PT-Helper/COIL/`) uses MVVM with a singleton service layer:
   - Infra: `NetworkMonitor`, `NotificationService`, `StreakService`, `PDFExportService`, `HistoryRelevanceFilter`, `TestDataSeeder`
 
 ### AI Request Types
-All AI calls go through `ClaudeAPIService` → Firebase Cloud Function proxy (`functions/src/index.ts`) → Claude API. System prompts and model config live server-side. The `AIRequestType` enum in `ClaudeAPIService.swift` has 9 cases:
+All AI calls go through `ClaudeAPIService` → Firebase Cloud Function proxy (`functions/src/index.ts`) → Claude API. System prompts and model config live server-side in `functions/src/prompts.ts` (`SYSTEM_PROMPTS`, `MODEL_CONFIG`); `functions/src/index.ts` only imports them. The `AIRequestType` enum in `ClaudeAPIService.swift` has 9 cases:
 
 | Request Type | Purpose |
 |---|---|
@@ -208,19 +215,26 @@ Firebase Cloud Functions in `functions/src/`:
 
 | Function | Type | Purpose |
 |---|---|---|
-| `onBudgetAlert` | Pub/Sub | Hard billing shutoff on budget overspend |
-| `claudeProxy` | HTTP | Routes AI requests to Claude API with rate limiting (20 req/min/user) |
-| `crossVerify` | HTTP | Cross-model verification for rehab plans |
-| `agentInsights` | HTTP | Managed Agent for recovery insights |
-| `createVirtualUserToken` | HTTP | Virtual user token for testing |
-| `generateExerciseImage` | HTTP | On-demand exercise image generation |
-| `aggregateDailyMetrics` | Scheduled (daily 01:00 UTC) | Daily analytics aggregation |
-| `sendNightlyReport` | Scheduled (07:00 Asia/Jerusalem) | Nightly product analytics digest via SendGrid |
+| `claudeProxy` | HTTP | Main AI proxy — routes the 9 client request types to Claude with rate limiting, quota, eligibility and response-schema validation |
+| `crossVerify` | HTTP | Cross-model fact-check of rehab-plan exercises via `gpt-4o-mini` |
+| `deleteAccount` | HTTP | Deletes all server-side data for the caller, then the Auth user (Auth last, every step idempotent) |
+| `createVirtualUserToken` | HTTP | Mints Firebase custom tokens for `vuser-` test identities; hard-restricted to `pt-helper-dev` |
+| `agentInsights` | HTTP | Managed Agent producing the recovery-insights digest; falls back to the single-call path on failure |
+| `agentFormAnalysis` | HTTP | Managed Agent comparing the current form session against prior sessions of the same exercise; falls back to the single-call `form_analysis` path |
+| `generateExerciseImage` | HTTP | On-demand exercise illustration: mapping lookup, FLUX generation, Gemini QA gate, Storage upload |
+| `backfillAnalytics` | HTTP (admin) | Re-materializes GA4 days on demand — the same-day verification path for the analytics pipeline |
+| `dashboardData` | HTTP (admin) | Read API for the monitoring dashboard; serves from Firestore only, never BigQuery |
+| `onBudgetAlert` | Pub/Sub (`budget-alerts`) | Hard billing shutoff at 120% of budget; dry-run unless `BILLING_SHUTOFF_ENABLED=true` |
+| `aggregateDailyMetrics` | Scheduled (daily 01:00 UTC) | Behavioral counts into `analytics/dailyAggregates/{date}` — no health data |
+| `sendNightlyReport` | Scheduled (daily 07:00 Asia/Jerusalem) | Claude-written product analytics digest, structurally validated then emailed via SendGrid |
+| `pullDailyAnalytics` | Scheduled (daily 17:00 UTC) | BigQuery → Firestore materialization of the GA4 export (re-pulls the last 2 days; GA4 restates shards for ~72h) |
+
+Full detail: `functions/README.md`.
 
 Supporting modules:
-- `managed-agent.ts` — Managed Agents API client, ephemeral session handling, `submit_recovery_insights` tool
-- `scripts/setup-managed-agent.ts` — One-time agent creation (`npm run setup-agent`)
-- `firestore-queries.ts` — Recovery data queries (14-day window)
+- `functions/src/managed-agent.ts` — Managed Agents API client, ephemeral session handling, `submit_recovery_insights` tool
+- `functions/scripts/setup-managed-agent.ts` — One-time agent creation (`npm run setup-agent`)
+- `functions/src/firestore-queries.ts` — Recovery data queries (14-day window)
 
 ### Firestore Data Structure
 - `users/{uid}/profile/health` — UserProfile document
@@ -300,7 +314,7 @@ Xcode 16 uses `PBXFileSystemSynchronizedRootGroup` — new Swift files are auto-
 - Test naming: `test<What>_<Condition>_<Expected>` (e.g., `testClassifySurgery_sameRegion_recentWithRestrictions`)
 
 ### New Request Type (AI Feature)
-1. Add system prompt to `SYSTEM_PROMPTS` in `functions/src/index.ts`
+1. Add system prompt to `SYSTEM_PROMPTS` in `functions/src/prompts.ts`
 2. Add model config to `MODEL_CONFIG` in the same file
 3. Add `AIRequestType` case in `ClaudeAPIService.swift`
 4. Add response parsing in the appropriate ViewModel
