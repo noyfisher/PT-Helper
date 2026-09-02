@@ -41,8 +41,12 @@ class AssessmentJourneyTestCase: UITestBase {
     /// the 3D model's hit-testing isn't reliably drivable from XCUITest.
     @MainActor
     func selectRegionFromList(_ regionName: String) {
+        // 30s, not 15: the RealityKit model load is the slowest step in the suite and
+        // this exact wait was the most common failure point across repeated FullPlan
+        // runs — it took ~59s in isolation on a loaded machine, so 15s was marginal
+        // under full-suite contention and failed a healthy app.
         let chooseFromList = app.descendants(matching: .any)["bodyMap.chooseFromListButton"]
-        XCTAssertTrue(chooseFromList.waitForExistence(timeout: 15), "Body map should offer the list fallback")
+        XCTAssertTrue(chooseFromList.waitForExistence(timeout: 30), "Body map should offer the list fallback")
         chooseFromList.tap()
 
         let region = app.buttons[regionName]
@@ -63,7 +67,7 @@ class AssessmentJourneyTestCase: UITestBase {
         XCTAssertFalse(done.exists, "The region list sheet should have been dismissed")
 
         let cont = app.descendants(matching: .any)["bodyMap3D.continueButton"]
-        XCTAssertTrue(cont.waitForExistence(timeout: 10), "Continue should appear once a region is selected")
+        XCTAssertTrue(cont.waitForExistence(timeout: 20), "Continue should appear once a region is selected")
 
         let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: cont)
         XCTAssertEqual(XCTWaiter.wait(for: [enabled], timeout: 10), .completed,
@@ -80,7 +84,7 @@ class AssessmentJourneyTestCase: UITestBase {
         let analyze = app.descendants(matching: .any)["painDetail.analyzeButton"]
         let cont = app.descendants(matching: .any)["painDetail.continueButton"]
 
-        XCTAssertTrue(cont.waitForExistence(timeout: 15) || analyze.waitForExistence(timeout: 3),
+        XCTAssertTrue(cont.waitForExistence(timeout: 30) || analyze.waitForExistence(timeout: 3),
                       "The pain wizard should present after choosing a region")
 
         for step in 0..<maxSteps {
@@ -112,7 +116,12 @@ class AssessmentJourneyTestCase: UITestBase {
                     let enabled = XCTNSPredicateExpectation(
                         predicate: NSPredicate(format: "isEnabled == true"), object: cont
                     )
-                    if XCTWaiter.wait(for: [enabled], timeout: 3) == .completed { break }
+                    // 10s, not 3. Measured over three full FullPlan runs, the dominant
+                    // first-attempt failure was "Continue never became enabled" on the
+                    // onset and relieving steps — this exact wait timing out while
+                    // SwiftUI re-evaluated `canContinue` on a loaded machine. The 15s
+                    // body-map waits were NOT the ones failing; this 3s one was.
+                    if XCTWaiter.wait(for: [enabled], timeout: 10) == .completed { break }
                 }
             }
 

@@ -376,6 +376,23 @@ struct BodyMap3DView: View {
             .gesture(tapGesture)
             .gesture(rotateAndPanGesture)
             .simultaneousGesture(zoomGesture)
+            // Present the 3D viewport as ONE accessibility element, not a container.
+            //
+            // For VoiceOver users the mesh is not operable — region selection by
+            // touch needs the hit-testing this view does on taps — so the accessible
+            // path is the "Choose from a list" button below, and the label says so
+            // rather than exposing an undrivable subtree. No UI test targets anything
+            // inside the viewport either; they all use the list fallback.
+            //
+            // NOT a fix for the XCUITest harness crashes, despite being tried as one.
+            // The hypothesis was that the recurring SIGSEGVs in Apple's accessibility
+            // snapshot walker came from recursing this view's subtree. Measured over
+            // three FullPlan runs after this change: the identical walker crash still
+            // occurred (zero COIL frames), so whatever it chokes on is not here. Kept
+            // on accessibility merits only.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("3D body map")
+            .accessibilityHint("Use Choose from a list to select a region.")
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // New identity on retry → RealityView rebuilds and its make closure
             // runs again. Without this the Retry button was inert.

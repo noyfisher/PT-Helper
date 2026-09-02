@@ -1,32 +1,32 @@
 {
-  "configurations" : [
+  "configurations": [
     {
-      "id" : "2B3C4D5E-6F78-9012-BCDE-F12345678901",
-      "name" : "Configuration 1",
-      "options" : {
-
-      }
+      "id": "2B3C4D5E-6F78-9012-BCDE-F12345678901",
+      "name": "Configuration 1",
+      "options": {}
     }
   ],
-  "defaultOptions" : {
-    "testTimeoutsEnabled" : true,
-    "defaultTestExecutionTimeAllowance" : 300
+  "defaultOptions": {
+    "testTimeoutsEnabled": true,
+    "defaultTestExecutionTimeAllowance": 300,
+    "testRepetitionMode": "retryOnFailure",
+    "maximumTestRepetitions": 3
   },
-  "testTargets" : [
+  "testTargets": [
     {
-      "target" : {
-        "containerPath" : "container:COIL.xcodeproj",
-        "identifier" : "7A071B032E8236EE00497F94",
-        "name" : "COILTests"
+      "target": {
+        "containerPath": "container:COIL.xcodeproj",
+        "identifier": "7A071B032E8236EE00497F94",
+        "name": "COILTests"
       }
     },
     {
-      "target" : {
-        "containerPath" : "container:COIL.xcodeproj",
-        "identifier" : "7A071B0D2E8236EE00497F94",
-        "name" : "COILUITests"
+      "target": {
+        "containerPath": "container:COIL.xcodeproj",
+        "identifier": "7A071B0D2E8236EE00497F94",
+        "name": "COILUITests"
       }
     }
   ],
-  "version" : 1
+  "version": 1
 }
