@@ -83,6 +83,7 @@ jobs:
             -scheme COIL \
             -testPlan UnitPlan \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
+            -resultBundlePath UnitPlan.xcresult \
             clean test
 
       - name: Upload test results
@@ -90,7 +91,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: ios/PT-Helper/fastlane/test_output
+          path: ios/PT-Helper/UnitPlan.xcresult
 
   functions:
     name: Cloud Functions (build, test, audit)

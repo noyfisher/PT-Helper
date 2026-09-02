@@ -71,6 +71,7 @@ jobs:
             -scheme COIL \
             -testPlan FullPlan \
             -destination 'platform=iOS Simulator,name=${{ matrix.simulator }},OS=latest' \
+            -resultBundlePath FullPlan.xcresult \
             clean test
 
       - name: Upload test results
@@ -78,4 +79,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nightly-results-${{ matrix.simulator }}
-          path: ios/PT-Helper/fastlane/test_output
+          path: ios/PT-Helper/FullPlan.xcresult
