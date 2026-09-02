@@ -225,7 +225,7 @@ python generate_exercise_images.py --api-key YOUR_BFL_KEY
 | `ViewModels/InjuryAnalysisViewModel.swift` | Analysis flow orchestration |
 | `ViewModels/RecoveryInsightsViewModel.swift` | Managed Agent recovery insights |
 | `ViewModels/GuidedWorkoutViewModel.swift` | Workout state machine with checkpointing |
-| `Views/ThreeTabView.swift` | 3-tab navigation container |
+| `Views/MainTabView.swift` | 4-tab navigation shell + floating "+" |
 | `Views/BodyMap3DView.swift` | RealityKit 3D body model |
 | `Services/ClaudeAPIService.swift` | Claude API client (9 request types) |
 | `functions/src/index.ts` | Cloud Functions with system prompts |

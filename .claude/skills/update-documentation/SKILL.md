@@ -103,7 +103,7 @@ Spawn `Explore` agent:
 
 ### Survey D — Navigation & Tabs
 Spawn `Explore` agent:
-> In `ios/PT-Helper/COIL/Views/ThreeTabView.swift` (or whatever the current root tab view is), list the tabs in order with the tab index and the view name shown. List every `@EnvironmentObject` injected at the root. Also identify any legacy nav wrappers and the launch arg that activates them. Under 200 words.
+> In `ios/PT-Helper/COIL/Views/MainTabView.swift` (or whatever the current root tab view is), list the tabs in order with the tab index and the view name shown. List every `@EnvironmentObject` injected at the root. Also identify any legacy nav wrappers and the launch arg that activates them. Under 200 words.
 
 ### Survey E — Test Plans & Launch Args
 Spawn `Explore` agent:

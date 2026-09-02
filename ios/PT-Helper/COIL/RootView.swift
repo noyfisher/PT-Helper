@@ -28,7 +28,7 @@ struct RootView: View {
     /// relaunch instead of re-trapping them in the questionnaire every launch.
     @AppStorage("skippedOnboarding") private var skippedOnboarding = false
     /// Set when the user *completes* onboarding, so the app hands them straight
-    /// into their first assessment (consumed + cleared by ThreeTabView).
+    /// into their first assessment (consumed + cleared by MainTabView).
     @AppStorage("pendingFirstAssessment") private var pendingFirstAssessment = false
 
     /// UI testing mode: bypass Firebase Auth and route based on launch arguments.

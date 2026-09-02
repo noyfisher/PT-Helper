@@ -71,11 +71,11 @@ Execute in this order to minimize backtracking:
 
 | Step | Screen | Navigation Action | View File |
 |------|--------|------------------|-----------|
-| 1 | Home | Already visible after launch (tab index 0) | `ios/PT-Helper/COIL/Views/ThreeTabView.swift` (HomeTab) |
+| 1 | Home | Already visible after launch (tab index 0) | `ios/PT-Helper/COIL/Views/MainTabView.swift` (HomeTab) |
 | 2 | Assessment Gateway | Tap the floating "+" | `ios/PT-Helper/COIL/Views/AssessmentGatewayView.swift` |
 | 3 | My Plan | Tap "My Plan" tab (tab index 1) | `ios/PT-Helper/COIL/Views/MyPlanTab.swift` |
 | 4 | Progress | Tap "Progress" tab (tab index 2) | `ios/PT-Helper/COIL/Views/ProgressTab.swift` |
-| 5 | Profile | Tap "Profile" tab (tab index 3) | `ios/PT-Helper/COIL/Views/ThreeTabView.swift` (ProfileTab) |
+| 5 | Profile | Tap "Profile" tab (tab index 3) | `ios/PT-Helper/COIL/Views/MainTabView.swift` (ProfileTab) |
 | 6 | Settings | From Progress, tap the settings/gear button | `ios/PT-Helper/COIL/Views/SettingsView.swift` |
 | 7 | Rehab Plan | From My Plan, tap a plan card | `ios/PT-Helper/COIL/Views/RehabPlanView.swift` |
 | 8 | Guided Workout | From Rehab Plan, tap "Start Workout" button | `ios/PT-Helper/COIL/Views/GuidedWorkoutView.swift` |

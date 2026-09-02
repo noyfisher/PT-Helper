@@ -6,12 +6,12 @@ import os
 /// Logs are visible in Console.app and Xcode console, and are automatically
 /// stripped of debug/info messages in production release builds.
 enum AppLogger {
-    static let api = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PTHelper", category: "API")
-    static let images = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PTHelper", category: "Images")
-    static let data = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PTHelper", category: "Data")
-    static let auth = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PTHelper", category: "Auth")
-    static let rehab = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PTHelper", category: "Rehab")
-    static let ui = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PTHelper", category: "UI")
+    static let api = Logger(subsystem: Bundle.main.bundleIdentifier ?? "COIL", category: "API")
+    static let images = Logger(subsystem: Bundle.main.bundleIdentifier ?? "COIL", category: "Images")
+    static let data = Logger(subsystem: Bundle.main.bundleIdentifier ?? "COIL", category: "Data")
+    static let auth = Logger(subsystem: Bundle.main.bundleIdentifier ?? "COIL", category: "Auth")
+    static let rehab = Logger(subsystem: Bundle.main.bundleIdentifier ?? "COIL", category: "Rehab")
+    static let ui = Logger(subsystem: Bundle.main.bundleIdentifier ?? "COIL", category: "UI")
 
     /// Set a custom key-value pair on Crashlytics for crash context.
     /// Use this to annotate the current screen, active plan ID, etc.

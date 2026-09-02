@@ -233,14 +233,14 @@ Supporting modules:
 - `missingExerciseImages` — Public collection for logging missing images
 
 ### Navigation & Shared State
-`MainTabView` is a thin passthrough to `ThreeTabView`; `MainTabView.swift` also hosts the shared `TabSelection` class and `AssessmentRoute` enum. `ThreeTabView` (named for a historical 3-tab IA) is the primary navigation shell with 4 tabs plus a floating "+":
+`MainTabView` is the primary navigation shell with 4 tabs plus a floating "+"; `TabSelection.swift` hosts the shared `TabSelection` class and `AssessmentRoute` enum:
 - **Tab 0: Home** — weekly date strip, today's program + preventative tasks
 - **Tab 1: My Plan** — active plan hero card + saved plans list
 - **Tab 2: Progress** — charts, recovery insights, settings, session history
 - **Tab 3: Profile** — profile summary + edit (`OnboardingEditView`)
 - **Floating "+"** — sets `TabSelection.assessmentRequest = .gateway`, presenting `AssessmentGatewayView` in a full-screen cover (dual gateway: pain analysis or wellness goals)
 
-`ThreeTabView` injects shared state via `@EnvironmentObject`:
+`MainTabView` injects shared state via `@EnvironmentObject`:
 - `TabSelection` — Cross-tab navigation + assessment routing
 - `SavedPlansViewModel` — Rehab plans (real-time Firestore listener)
 - `WorkoutViewModel` — Workout session tracking

@@ -5,7 +5,7 @@ import SwiftUI
 /// the wellness path (goal picker) — the wellness side was previously unreachable
 /// in the live 3-tab UI (audit #8).
 ///
-/// Hosted inside `ThreeTabView`'s assessment `fullScreenCover` (which supplies the
+/// Hosted inside `MainTabView`'s assessment `fullScreenCover` (which supplies the
 /// `NavigationStack` and the close button). Crucially, picking a path swaps this
 /// view's *root content in place* rather than pushing via `navigationDestination`:
 /// `BodyMap3DView`'s RealityKit `RealityView` renders fine as a NavigationStack

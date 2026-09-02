@@ -11,7 +11,7 @@ struct WellnessGoalPickerView: View {
     /// @ObservedObject, so every re-render of this view handed the pushed screen
     /// a brand-new ViewModel: goal index back to 0, saved per-goal assessments
     /// gone, any in-flight analysis orphaned. This view lives inside
-    /// ThreeTabView's fullScreenCover, which re-renders whenever any of its five
+    /// MainTabView's fullScreenCover, which re-renders whenever any of its five
     /// shared @StateObjects publish — a NetworkMonitor flap or a Firestore plans
     /// snapshot mid-assessment was enough. Same pattern as BodyMap3DView.
     @State private var wellnessVM: WellnessAnalysisViewModel?

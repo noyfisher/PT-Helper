@@ -8,7 +8,7 @@ import FirebaseMessaging
 import UserNotifications
 
 @main
-struct PainPointApp: App {
+struct COILApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
 
     init() {

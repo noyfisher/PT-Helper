@@ -220,7 +220,7 @@ Use this mapping to find the view file. If the screen name is not listed, STOP a
 | Screen Name | View File |
 |-------------|-----------|
 | `form-check` | `ios/PT-Helper/COIL/Views/FormCheckTab.swift` |
-| `profile` | `ios/PT-Helper/COIL/Views/ThreeTabView.swift` (ProfileTab) |
+| `profile` | `ios/PT-Helper/COIL/Views/MainTabView.swift` (ProfileTab) |
 | `settings` | `ios/PT-Helper/COIL/Views/SettingsView.swift` |
 | `onboarding` | `ios/PT-Helper/COIL/Views/OnboardingView.swift` |
 | `plans` | `ios/PT-Helper/COIL/Views/MyPlanTab.swift` |
@@ -233,7 +233,7 @@ Use this mapping to find the view file. If the screen name is not listed, STOP a
 | `timer` | `ios/PT-Helper/COIL/ViewModels/GuidedWorkoutViewModel.swift` (rest timer; there is no standalone TimerView) |
 | `notes` | `ios/PT-Helper/COIL/Views/NotesView.swift` |
 | `achievements` | `ios/PT-Helper/COIL/Views/AchievementsView.swift` |
-| `home` | `ios/PT-Helper/COIL/Views/ThreeTabView.swift` (HomeTab) |
+| `home` | `ios/PT-Helper/COIL/Views/MainTabView.swift` (HomeTab) |
 
 **Step 2 — Build and launch app**
 

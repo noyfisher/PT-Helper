@@ -1,7 +1,7 @@
 # UX Flows
 
 ## Navigation Structure
-4-tab shell via `ThreeTabView` (named for a historical 3-tab IA) plus a floating "+":
+4-tab shell via `MainTabView` plus a floating "+":
 - **Home** (Tab 0) — weekly date strip, today's program + preventative tasks
 - **My Plan** (Tab 1) — Active plan hero card + saved plans list, with Injury / Wellness sub-tabs filtering saved plans by `RehabPlan.PlanType`
 - **Progress** (Tab 2) — Charts, recovery insights, settings, session history
