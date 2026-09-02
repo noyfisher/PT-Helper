@@ -82,7 +82,7 @@ Full recipes (starting sessions, simulator assignment table, cross-session messa
 ### MVVM + Services Pattern
 The iOS app (`ios/PT-Helper/COIL/`) uses MVVM with a singleton service layer:
 
-- **Models/** (22 files) — Codable structs and analyzers:
+- **Models/** (~22 files) — Codable structs and analyzers:
   - Core: `UserProfile`, `PainAssessment`, `RehabPlan`, `BodyRegion`, `BodyZone`, `BodyMapConstants`
   - Analysis: `InjuryAnalyzer`, `AssessmentSnapshot`
   - Wellness: `WellnessAnalyzer`, `WellnessAnalysisResult`, `WellnessAssessment`
@@ -91,15 +91,15 @@ The iOS app (`ios/PT-Helper/COIL/`) uses MVVM with a singleton service layer:
   - Form: `FormAnalysis`
   - Outcome: `OutcomeFeedback`
   - Other: `Note`, `SessionEvent`, `LegalContent`
-- **ViewModels/** (14 files) — `@MainActor @ObservableObject` classes that own business logic and publish UI state
+- **ViewModels/** (~14 files) — `@MainActor @ObservableObject` classes that own business logic and publish UI state
   - `InjuryAnalysisViewModel`, `RehabPlanViewModel`, `GuidedWorkoutViewModel`, `SavedPlansViewModel`, `WorkoutViewModel`
   - `WellnessAnalysisViewModel`, `WellnessPlanViewModel`, `RecoveryInsightsViewModel`
   - `FormAnalysisViewModel`, `ExerciseSwapViewModel`, `ReAssessmentViewModel`
   - `BodyMapViewModel`, `OnboardingViewModel`, `NotesViewModel`
-- **Views/** (71 files total: 45 top-level + 19 Components + 6 OnboardingSteps + 1 Debug) — SwiftUI views using `@ObservedObject`/`@StateObject`. Navigation via `NavigationStack`
-  - `Components/` — Reusable UI (exercise image, phase stepper, body silhouette, video recorder, etc.)
+- **Views/** (~67 files total: ~44 top-level + ~16 Components + ~6 OnboardingSteps + 1 Debug) — SwiftUI views using `@ObservedObject`/`@StateObject`. Navigation via `NavigationStack`
+  - `Components/` — Reusable UI (exercise image, phase stepper, video recorder, etc.)
   - `OnboardingSteps/` — Multi-step health profile collection (basic info, injury/surgical/medical history, activity level, review)
-- **Services/** (33 files) — Singletons (`static let shared`) for API, persistence, validation, logging
+- **Services/** (~35 files) — Singletons (`static let shared`) for API, persistence, validation, logging
   - API: `ClaudeAPIService`, `APIConfig`
   - Validation: `ResponseValidationPipeline`, `BiomechanicalRuleEngine`, `FormFeedbackValidationPipeline`, `KnowledgeGraphService`, `CrossModelVerificationService`, `DataQualityScorer`, `InputSanitizer`, `ShadowModeJSONParser`
   - Pose: `PoseDetectionService`, `PoseAnalysisEngine`
