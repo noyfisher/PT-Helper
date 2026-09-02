@@ -1,5 +1,15 @@
 # Tier 2 PR C-2 — Knowledge Graph v2 Data Pipeline (handoff)
 
+> **STATUS (2026-09-02):** This work is paused, not finished. The PT review
+> stalled at **1,238 of 1,582** decisions in `scripts/output/kg_review_decisions.json`;
+> `merge_kg_review.py` has never been run, so
+> `ios/PT-Helper/COIL/Resources/medical_knowledge_graph_v2.json` does not exist and
+> the `knowledgeGraphV2Enabled` flag in `KnowledgeGraphService.swift` is still off —
+> the app runs on v1 alone. The three scripts this document describes
+> (`expand_knowledge_graph.py`, `review_kg_candidates.py`, `merge_kg_review.py`) are
+> live and unchanged at `scripts/`; everything below still applies once the review
+> resumes.
+
 ## State
 
 PR C-1 shipped the **infrastructure** (gen script, review tool, iOS-side v2

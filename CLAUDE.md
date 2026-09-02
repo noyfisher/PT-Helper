@@ -71,8 +71,8 @@ Multiple Claude Code sessions may run against this repo concurrently. Rules:
 - **Same-checkout parallelism** only for short tasks in strictly disjoint areas (e.g. `functions/` vs `ios/`); stage files explicitly, never in bulk.
 - **Simulator**: one device per session, targeted by UDID — two runs on one booted sim fight over install/launch.
 - **Firebase deploys**: serialize — never `firebase deploy` from two sessions at once (single pt-helper-dev project).
-- **Image pipeline** (`scripts/`): main checkout only, one owner session at a time (shared `scripts/output/` + API quotas; the directory is gitignored and doesn't follow into worktrees).
-- **Untracked essentials** (`functions/.env`, `scripts/animation-pilot/.env`) are copied into new worktrees via `.worktreeinclude` — add new gitignored-but-required files there.
+- **Image pipeline** (`scripts/`): main checkout only, one owner session at a time. `scripts/output/` **is tracked in git** and does follow into worktrees — the one-owner rule is about the shared API quotas (~250 image generations/day) and the fact that `rebuild_image_mapping.py` rewrites `exercise_image_mapping.json`, which both the iOS bundle and the functions catalog build from.
+- **Untracked essentials** (`functions/.env`, `scripts/archive/pilots/animation-pilot/.env`) are copied into new worktrees via `.worktreeinclude` — add new gitignored-but-required files there.
 - **Merges**: small branches, rebase on `main` often, FullPlan before merge.
 
 Full recipes (starting sessions, simulator assignment table, cross-session messaging, lead+agents pattern): `ios/PT-Helper/docs/parallel-sessions.md`.
@@ -312,9 +312,10 @@ Use `.trackScreen("ScreenName")` modifier on new views. `SessionLogger` auto-tra
 1364 AI-generated exercise illustrations (start + end frame pairs) in `scripts/output/`. Primary generation uses **Nano Banana Pro** (`gemini-3-pro-image-preview`); QA uses Gemini 2.5 Flash vision. FLUX 2 Pro (BFL API) is legacy and only retained for the on-demand `generateExerciseImage` Cloud Function (migration to Nano Banana Pro is an open item).
 
 To add a new exercise:
-1. Add metadata to `scripts/output/all_exercises_metadata.json` (canonical) or `scripts/exercise_list.json` (legacy curated 190)
+1. Add metadata to `scripts/output/all_exercises_metadata.json` (canonical; `scripts/exercise_list.json` is the legacy curated 190, still read by the FLUX-era and QA scripts)
 2. Generate: `python scripts/generate_missing_images.py` (Nano Banana Pro + inline QA)
 3. For failures: `python scripts/regen_with_auto_prompts.py` (Gemini observation → targeted anti-error prompt → regen)
-4. Rebuild mapping: `python scripts/rebuild_image_mapping.py` (syncs PNGs + mapping to iOS Resources)
+4. End frames: `python scripts/generate_end_frames_nb.py` conditions NB Pro on the passing start image; `python scripts/qa_consistency.py` scores the pair; `python scripts/regen_end_frames_with_corrections.py` fixes what fails
+5. Rebuild mapping: `python scripts/rebuild_image_mapping.py` (rebuilds the mapping JSON and copies it to iOS Resources; PNGs are uploaded to Firebase Storage with `scripts/upload_to_firebase.sh`)
 
 Image resolution in `ExerciseImageService.swift` uses 8-layer fuzzy matching: exact name → normalized → alias → prefix → suffix → plural toggle → synonym expansion → stockpile alias fallback.

@@ -24,7 +24,7 @@ Worktrees land in `.claude/worktrees/<name>/` on their own branch (`worktree-<na
 - **Xcode 16 synchronized groups** — adding files doesn't touch the pbxproj, so worktree merges don't hit the classic pbxproj-conflict problem.
 - **DerivedData is keyed by path** — each worktree builds into its own DerivedData automatically (costs disk + a cold first build; no clashes).
 
-**Untracked essentials.** `.worktreeinclude` (repo root, gitignore syntax) lists gitignored files that Claude Code copies into every new worktree. Currently: `functions/.env`, `scripts/animation-pilot/.env`. Add any new gitignored-but-required file there. `functions/node_modules/` and `functions/lib/` are *not* copied — run `npm install` / `npm run build` inside the worktree when doing functions work.
+**Untracked essentials.** `.worktreeinclude` (repo root, gitignore syntax) lists gitignored files that Claude Code copies into every new worktree. Currently: `functions/.env`, `scripts/archive/pilots/animation-pilot/.env`. Add any new gitignored-but-required file there. `functions/node_modules/` and `functions/lib/` are *not* copied — run `npm install` / `npm run build` inside the worktree when doing functions work.
 
 ## Shared resources worktrees don't isolate
 

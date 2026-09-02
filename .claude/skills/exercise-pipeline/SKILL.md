@@ -138,13 +138,20 @@ Exercise Images Status:
 
 ---
 
-## `sync` — Deploy Images to iOS Bundle
+## `sync` — Publish Images and the Mapping
 
-Copy generated and approved images to the iOS app resources:
+**PNGs do not go into the app bundle.** `ios/PT-Helper/COIL/Resources/` contains no
+exercise images at all — the app downloads every illustration from Firebase Storage at
+runtime. Only the mapping JSON ships inside the app.
 
-1. Copy `scripts/output/exercise_image_mapping.json` → `ios/PT-Helper/COIL/Resources/exercise_image_mapping.json`
-2. Copy all PNGs from `scripts/output/poses/` → `ios/PT-Helper/COIL/Resources/` (only those in the mapping)
-3. Report how many files were copied/updated
+1. Run `python3 scripts/rebuild_image_mapping.py` — it rebuilds
+   `scripts/output/exercise_image_mapping.json` from the PNGs on disk and copies **that
+   JSON only** to `ios/PT-Helper/COIL/Resources/exercise_image_mapping.json`
+2. Upload the PNGs: `./scripts/upload_to_firebase.sh` (needs `gcloud auth login`)
+3. Regenerate the functions catalog: `cd functions && npm run build`
+4. Verify with `python3 scripts/check_image_mapping_integrity.py` — it fails if the two
+   mapping copies drift or a mapping entry has no PNG
+5. Report how many images were uploaded and how many mapping entries changed
 
 ---
 
