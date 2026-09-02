@@ -25,7 +25,7 @@ Emit a single status line before and after each phase:
 2. **Checkpoint before writing** — always create the snapshot commit first (per the user's version-control-safety memory). The user can revert the entire sync with `git reset --hard HEAD~1`.
 3. **Memory files live outside the repo** at `~/.claude/projects/-Users-noyfisher-IOS-Projects-PT-Helper-Agent-v1/memory/`. Git checkpoint does NOT cover them — back them up separately to `/tmp/memory-backup-<timestamp>/` before rewriting.
 4. **R1 applies — grep before rewriting any specific fact.** Never trust an old number, file count, or enum name from the doc itself. Always read the current source.
-5. **Skip historical artifacts.** Do not touch dated files like `ios/PT-Helper/docs/ux-audit-YYYY-MM-DD.md`, `ios/PT-Helper/docs/test-reports/smoke-YYYY-MM-DD.md`, `CHANGELOG.md`, `functions/test/PR-B-dryrun-results.md`, `virtual-users/results/**`, or anything under `vendor/`, `node_modules/`, `build/`, `DerivedData/`. These are point-in-time records.
+5. **Skip historical artifacts.** Do not touch point-in-time records: anything under `docs/archive/` or `scripts/archive/`, `virtual-users/results/**`, `CHANGELOG.md`, or anything under `vendor/`, `node_modules/`, `build/`, `DerivedData/`. Dated filenames (`*-YYYY-MM-DD.*`) are a reliable tell.
 6. **Do not auto-commit the rewrites.** Leave them uncommitted so the user can review the diff before deciding to commit.
 7. **Flag uncertain items rather than guessing.** If you can't verify a fact from code, leave the doc unchanged and report it in the "needs human input" section.
 

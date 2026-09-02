@@ -10,7 +10,7 @@
     {
       "name": "pitch-preview",
       "runtimeExecutable": "/usr/bin/python3",
-      "runtimeArgs": ["-m", "http.server", "8090", "--directory", ".claude/plans"],
+      "runtimeArgs": ["-m", "http.server", "8090", "--directory", "docs/archive/design-explorations"],
       "port": 8090
     },
     {
@@ -18,13 +18,6 @@
       "runtimeExecutable": "/bin/bash",
       "runtimeArgs": ["-c", "export PATH=/usr/local/bin:$PATH && cd functions && npm run serve"],
       "port": 5001
-    },
-    {
-      "name": "virtual-user-portal",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "cwd": "virtual-users/portal",
-      "port": 3100
     }
   ]
 }

@@ -133,7 +133,7 @@ For each captured screen, analyze the screenshot, accessibility tree, and source
 
 ## Phase 5 — Generate Report
 
-Create the report file at `ios/PT-Helper/docs/ux-audit-{YYYY-MM-DD}.md`:
+Create the report file at `docs/archive/ux-audits/ux-audit-{YYYY-MM-DD}.md`:
 
 ```markdown
 # UX Audit Report — {date}
