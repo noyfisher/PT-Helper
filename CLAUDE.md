@@ -219,7 +219,7 @@ Firebase Cloud Functions in `functions/src/`:
 
 Supporting modules:
 - `managed-agent.ts` — Managed Agents API client, ephemeral session handling, `submit_recovery_insights` tool
-- `setup-managed-agent.ts` — One-time agent creation
+- `scripts/setup-managed-agent.ts` — One-time agent creation (`npm run setup-agent`)
 - `firestore-queries.ts` — Recovery data queries (14-day window)
 
 ### Firestore Data Structure

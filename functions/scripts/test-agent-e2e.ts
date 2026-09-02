@@ -7,7 +7,7 @@
  * 4. Prints the result
  * 5. Cleans up test data
  *
- * Run: cd functions && ANTHROPIC_API_KEY=$(firebase functions:secrets:access ANTHROPIC_API_KEY) npx ts-node src/test-agent-e2e.ts
+ * Run: cd functions && ANTHROPIC_API_KEY=$(firebase functions:secrets:access ANTHROPIC_API_KEY) npx ts-node scripts/test-agent-e2e.ts
  */
 
 import * as admin from "firebase-admin";
