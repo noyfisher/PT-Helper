@@ -85,3 +85,8 @@ jobs:
         with:
           name: nightly-results-${{ matrix.simulator }}
           path: ios/PT-Helper/FullPlan.xcresult
+          # A FullPlan bundle with failing UI tests carries their screen
+          # recordings and weighed 778 MB per leg on 2026-09-02; two legs a
+          # night at the 90-day default is tens of GB for nothing. Two weeks
+          # covers next-morning triage.
+          retention-days: 14
