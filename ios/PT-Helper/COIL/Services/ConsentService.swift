@@ -129,8 +129,21 @@ final class ConsentService: ObservableObject {
     /// sharing recorded as separate timestamps — to `users/{uid}/consents/healthData`
     /// and updates the mirror. Called only after BOTH consent checkboxes are ticked.
     func recordHealthDataConsent() {
+        // Mirror first, unconditionally. `hasHealthDataConsent` reads only this
+        // mirror, and the point-of-use gates (BodyMap3DView, WellnessGoalPickerView)
+        // chain into the next screen from the sheet's onDismiss by re-reading it.
+        // When the mirror was written only after the uid guard below, any state
+        // with no Firebase user — the `--uitesting` auth bypass, a sign-out race —
+        // dismissed the consent sheet without recording anything and dead-ended
+        // the user on the body map. That is exactly why the four assessment
+        // journey UI tests failed on every fresh simulator (the nightly runner)
+        // while passing on a developer machine whose mirror was already set.
+        UserDefaults.standard.set(LegalContent.healthDataPolicyVersion,
+                                  forKey: MirrorKeys.healthDataPolicyVersion)
+        objectWillChange.send()
+
         guard let uid = Auth.auth().currentUser?.uid else {
-            AppLogger.data.error("recordHealthDataConsent: no signed-in user")
+            AppLogger.data.error("recordHealthDataConsent: no signed-in user; consent mirrored locally only")
             return
         }
 
@@ -148,10 +161,6 @@ final class ConsentService: ObservableObject {
                     AppLogger.data.error("Failed to record health data consent: \(error.localizedDescription)")
                 }
             }
-
-        UserDefaults.standard.set(LegalContent.healthDataPolicyVersion,
-                                  forKey: MirrorKeys.healthDataPolicyVersion)
-        objectWillChange.send()
     }
 
     /// MHMDA withdrawal: removes the consent assertion server-side while keeping
@@ -159,8 +168,13 @@ final class ConsentService: ObservableObject {
     /// field-deleted so `load()` reconciliation treats it as unconsented on every
     /// device). Mirror cleared immediately so point-of-use gates re-fire this session.
     func revokeHealthDataConsent() {
+        // Same ordering as recordHealthDataConsent: the local withdrawal must
+        // take effect even when the server write cannot be attempted.
+        UserDefaults.standard.removeObject(forKey: MirrorKeys.healthDataPolicyVersion)
+        objectWillChange.send()
+
         guard let uid = Auth.auth().currentUser?.uid else {
-            AppLogger.data.error("revokeHealthDataConsent: no signed-in user")
+            AppLogger.data.error("revokeHealthDataConsent: no signed-in user; withdrawal mirrored locally only")
             return
         }
         db.collection("users").document(uid)
@@ -174,8 +188,6 @@ final class ConsentService: ObservableObject {
                     AppLogger.data.error("Failed to record consent withdrawal: \(error.localizedDescription)")
                 }
             }
-        UserDefaults.standard.removeObject(forKey: MirrorKeys.healthDataPolicyVersion)
-        objectWillChange.send()
     }
 
     // MARK: - Local mirror lifecycle

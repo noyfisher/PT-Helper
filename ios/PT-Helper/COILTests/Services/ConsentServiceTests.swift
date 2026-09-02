@@ -1,4 +1,5 @@
 import XCTest
+import FirebaseAuth
 @testable import COIL
 
 @MainActor
@@ -55,6 +56,33 @@ final class ConsentServiceTests: XCTestCase {
 
     func testHasHealthDataConsent_missingMirror_isFalse() {
         UserDefaults.standard.removeObject(forKey: ConsentService.MirrorKeys.healthDataPolicyVersion)
+        XCTAssertFalse(ConsentService.shared.hasHealthDataConsent)
+    }
+
+    // MARK: - record / revoke without a signed-in user
+    //
+    // The unit-test host has no Firebase user, which is also the `--uitesting`
+    // state. The mirror must still change so the point-of-use gates that
+    // re-read `hasHealthDataConsent` from a sheet's onDismiss can continue.
+
+    func testRecordHealthDataConsent_withoutSignedInUser_setsMirror() throws {
+        try XCTSkipIf(Auth.auth().currentUser != nil, "requires no signed-in Firebase user")
+        UserDefaults.standard.removeObject(forKey: ConsentService.MirrorKeys.healthDataPolicyVersion)
+
+        ConsentService.shared.recordHealthDataConsent()
+
+        XCTAssertEqual(UserDefaults.standard.string(forKey: ConsentService.MirrorKeys.healthDataPolicyVersion),
+                       LegalContent.healthDataPolicyVersion)
+        XCTAssertTrue(ConsentService.shared.hasHealthDataConsent)
+    }
+
+    func testRevokeHealthDataConsent_withoutSignedInUser_clearsMirror() throws {
+        try XCTSkipIf(Auth.auth().currentUser != nil, "requires no signed-in Firebase user")
+        UserDefaults.standard.set(LegalContent.healthDataPolicyVersion, forKey: ConsentService.MirrorKeys.healthDataPolicyVersion)
+
+        ConsentService.shared.revokeHealthDataConsent()
+
+        XCTAssertNil(UserDefaults.standard.string(forKey: ConsentService.MirrorKeys.healthDataPolicyVersion))
         XCTAssertFalse(ConsentService.shared.hasHealthDataConsent)
     }
 

@@ -115,7 +115,22 @@ class UITestBase: XCTestCase {
     func dismissDisclaimerIfPresent(timeout: TimeInterval = 5) {
         let cta = app.buttons["I Understand, Continue"]
         guard cta.waitForExistence(timeout: timeout) else { return }
-        cta.tap()
-        _ = cta.waitForNonExistence(timeout: 5)
+
+        // On a fresh simulator this sheet is chained from the consent sheet's
+        // onDismiss, so it exists while it is still animating in, and a tap
+        // synthesised at that moment lands where the button was, not where it
+        // ends up. Measured on an erased simulator: the first tap missed,
+        // `markAccepted()` never ran, and the pain wizard never presented — the
+        // same failure the nightly runner reports on every run. Wait for the
+        // button to be hittable, then re-tap while the sheet is still up.
+        var attempts = 0
+        repeat {
+            let hittable = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "isHittable == true"), object: cta)
+            _ = XCTWaiter.wait(for: [hittable], timeout: 3)
+            cta.tap()
+            attempts += 1
+        } while !cta.waitForNonExistence(timeout: 3) && attempts < 3
+        XCTAssertFalse(cta.exists, "The medical disclaimer should dismiss after accepting it")
     }
 }
