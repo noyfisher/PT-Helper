@@ -28,7 +28,12 @@ jobs:
   full-ios:
     name: FullPlan (${{ matrix.simulator }})
     runs-on: macos-15
-    timeout-minutes: 45
+    # 75, not 45: FullPlan runs with retryOnFailure x3, so a leg where the
+    # four assessment-journey tests fail on the runner spends ~15 extra
+    # minutes in retries and then needs time to write FullPlan.xcresult.
+    # The 2026-09-02 dispatch finished its tests at 36 min and was killed
+    # at 45 during teardown, so nothing was uploaded.
+    timeout-minutes: 75
     strategy:
       # Report both legs even when one fails — a failure that reproduces on only one
       # device size is the interesting signal, and fail-fast would hide it.
